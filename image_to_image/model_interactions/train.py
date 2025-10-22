@@ -23,8 +23,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ..utils.argument_parsing import parse_args
 from ..data.physgen import PhysGenDataset
+from ..data.residual_physgen import PhysGenResidualDataset, to_device
 from ..models.resfcn import ResFCN
 from ..models.pix2pix import Pix2Pix
+from ..models.residual_design_model import ResidualDesignModel
 from ..losses.weighted_combined_loss import WeightedCombinedLoss
 
 
@@ -32,6 +34,91 @@ from ..losses.weighted_combined_loss import WeightedCombinedLoss
 # ---------------------------
 #      > Train Helpers <
 # ---------------------------
+def get_model(model_name, args, criterion, device):
+    model_name = model_name.lower()
+
+    if model_name== "resfcn":
+        model = ResFCN(in_channels=args.resfcn_in_channels, hidden_channels=args.resfcn_hidden_channels, out_channels=args.resfcn_out_channels, num_blocks=args.resfcn_num_blocks).to(device)
+    elif model_name == "resfcn_2":
+        model = ResFCN(in_channels=args.resfcn_2_in_channels, hidden_channels=args.resfcn_2_hidden_channels, out_channels=args.resfcn_2_out_channels, num_blocks=args.resfcn_2_num_blocks).to(device)
+    elif model_name == "pix2pix":
+        model = Pix2Pix(input_channels=args.pix2pix_in_channels, output_channels=args.pix2pix_out_channels, hidden_channels=args.pix2pix_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_second_loss_lambda)
+    elif model_name == "pix2pix_2":
+        model = Pix2Pix(input_channels=args.pix2pix_2_in_channels, output_channels=args.pix2pix_2_out_channels, hidden_channels=args.pix2pix_2_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_2_second_loss_lambda)
+    else:
+        raise ValueError(f"'{model_name}' is not an supported model.")
+
+    return model
+
+
+
+def get_loss(loss_name, args):
+    loss_name = loss_name.lower()
+    if loss_name == "l1":
+        criterion = nn.L1Loss()
+    elif loss_name == "l1_2":
+        criterion = nn.L1Loss()
+    elif loss_name == "crossentropy":
+        criterion = nn.CrossEntropyLoss()
+    elif loss_name == "crossentropy_2":
+        criterion = nn.CrossEntropyLoss()
+    elif loss_name == "weighted_combined":
+        criterion = WeightedCombinedLoss( 
+                        silog_lambda=args.wc_loss_silog_lambda, 
+                        weight_silog=args.wc_loss_weight_silog, 
+                        weight_grad=args.wc_loss_weight_grad,
+                        weight_ssim=args.wc_loss_weight_ssim,
+                        weight_edge_aware=args.wc_loss_weight_edge_aware,
+                        weight_l1=args.wc_loss_weight_l1,
+                        weight_var=args.wc_loss_weight_var,
+                        weight_range=args.wc_loss_weight_range,
+                        weight_blur=args.wc_loss_weight_blur
+                    )    
+    elif loss_name == "weighted_combined_2":
+        criterion = WeightedCombinedLoss( 
+                        silog_lambda=args.wc_loss_silog_lambda_2, 
+                        weight_silog=args.wc_loss_weight_silog_2, 
+                        weight_grad=args.wc_loss_weight_grad_2,
+                        weight_ssim=args.wc_loss_weight_ssim_2,
+                        weight_edge_aware=args.wc_loss_weight_edge_aware_2,
+                        weight_l1=args.wc_loss_weight_l1_2,
+                        weight_var=args.wc_loss_weight_var_2,
+                        weight_range=args.wc_loss_weight_range_2,
+                        weight_blur=args.wc_loss_weight_blur_2
+                    )    
+    else:
+        raise ValueError(f"'{loss_name}' is not an supported loss.")
+    
+    return criterion
+
+
+
+def backward_model(model, x, y, optimizer, criterion, epoch, scaler):
+    if isinstance(model, Pix2Pix):
+        if epoch is None or epoch % 2 == 0:
+            model.discriminator_step(x, y, optimizer[1], scaler)
+        loss, _, _ = model.generator_step(x, y, optimizer[0], scaler)
+    elif scaler:
+        # reset gradients 
+        optimizer.zero_grad()
+
+        with autocast():
+            y_predict = model(x)
+            loss = criterion(y_predict, y)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        # reset gradients 
+        optimizer.zero_grad()
+
+        y_predict = model(x)
+        loss = criterion(y_predict, y)
+        loss.backward()
+        optimizer.step()
+    return loss
+
+
 
 def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, scaler=None):
     # change to train mode -> calc gradients
@@ -39,30 +126,40 @@ def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, sca
 
     total_loss = 0.0
     for x, y in tqdm(loader, desc="Training", leave=False):
-        x, y = x.to(device), y.to(device)
 
-        if isinstance(model, Pix2Pix):
-            if epoch is None or epoch % 2 == 0:
-                model.discriminator_step(x, y, optimizer[1], scaler)
-            loss, _, _ = model.generator_step(x, y, optimizer[0], scaler)
-        elif scaler:
-            # reset gradients 
-            optimizer.zero_grad()
+        if not isinstance(model, ResidualDesignModel):
+            x, y = x.to(device), y.to(device)
 
-            with autocast():
-                y_predict = model(x)
-                loss = criterion(y_predict, y)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+        if isinstance(model, ResidualDesignModel):
+            base_input, complex_input = x
+            base_target, complex_target, target_= y
+
+            # Basline
+            base_input = base_input.to(device)
+            base_target = base_target.to(device)
+            base_loss = backward_model(model=model.base_model, x=base_input, y=base_target, optimizer=optimizer[0], criterion=criterion[0], epoch=epoch, scaler=scaler)
+            # del base_input
+            # torch.cuda.empty_cache()
+
+            # Complex
+            complex_input = complex_input.to(device)
+            complex_target = complex_target.to(device)
+            complex_loss = backward_model(model=model.complex_model, x=complex_input, y=complex_target, optimizer=optimizer[1], criterion=criterion[1], epoch=epoch, scaler=scaler)
+            # del complex_input
+            # torch.cuda.empty_cache()
+
+            # Fusion
+            target_ = target_.to(device)
+            combine_loss = model.combine_net.backward(base_target, complex_target, target_)
+
+            model.backward(base_target, complex_target, target_)
+
+            model.last_base_loss = base_loss
+            model.last_complex_loss = complex_loss
+            model.last_combined_loss = combine_loss
+            loss = base_loss + complex_loss + combine_loss
         else:
-            # reset gradients 
-            optimizer.zero_grad()
-
-            y_predict = model(x)
-            loss = criterion(y_predict, y)
-            loss.backward()
-            optimizer.step()
+            loss = backward_model(model=model, x=x, y=y, optimizer=optimizer, criterion=criterion, epoch=epoch, scaler=scaler)
         total_loss += loss.item()
     return total_loss / len(loader)
 
@@ -91,7 +188,7 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
                     img_grid_pred = torchvision.utils.make_grid(y_predict[:4].float().cpu() / max_val)
 
                 max_val = max(y.max().item(), 1e-8)
-                if img_grid_gt.ndim == 3:
+                if y.ndim == 3:
                     img_grid_gt = torchvision.utils.make_grid(y[:4].unsqueeze(1).float().cpu() / max_val)
                 else:
                     img_grid_gt = torchvision.utils.make_grid(y[:4].float().cpu() / max_val)
@@ -143,47 +240,47 @@ def train(args=None):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
     # Dataset loading
-    train_dataset = PhysGenDataset(variation=args.data_variation, mode="train", input_type=args.input_type, output_type=args.output_type, 
-                                   fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
-    val_dataset = PhysGenDataset(variation=args.data_variation, mode="eval", input_type=args.input_type, output_type=args.output_type, 
-                                   fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
+    if args.model.lower() == "residual_design_model":
+        train_dataset = PhysGenResidualDataset(variation=args.data_variation, mode="train", 
+                                               fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
+        
+        val_dataset = PhysGenDataset(variation=args.data_variation, mode="eval", input_type="osm", output_type="standard", 
+                                    fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
+    else:
+        train_dataset = PhysGenDataset(variation=args.data_variation, mode="train", input_type=args.input_type, output_type=args.output_type, 
+                                    fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
+        
+        val_dataset = PhysGenDataset(variation=args.data_variation, mode="eval", input_type=args.input_type, output_type=args.output_type, 
+                                    fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size)
 
     # Loss
-    if args.loss.lower() == "l1":
-        criterion = nn.L1Loss()
-    elif args.loss.lower() == "crossentropy":
-        criterion = nn.CrossEntropyLoss()
-    elif args.loss.lower() == "weighted_combined":
-        criterion = WeightedCombinedLoss( 
-                        silog_lambda=args.wc_loss_silog_lambda, 
-                        weight_silog=args.wc_loss_weight_silog, 
-                        weight_grad=args.wc_loss_weight_grad,
-                        weight_ssim=args.wc_loss_weight_ssim,
-                        weight_edge_aware=args.wc_loss_weight_edge_aware,
-                        weight_l1=args.wc_loss_weight_l1,
-                        weight_var=args.wc_loss_weight_var,
-                        weight_range=args.wc_loss_weight_range,
-                        weight_blur=args.wc_loss_weight_blur
-                    )    
-    else:
-        raise ValueError(f"'{args.loss}' is not an supported loss.")
+    criterion = get_loss(loss_name=args.loss, args=args)
+    
+    if args.model.lower() == "residual_design_model":
+        criterion = [
+            criterion,
+            get_loss(loss_name=args.loss_2+"_2", args=args)
+        ]
 
     # Model Loading
-    if args.model.lower() == "resfcn":
-        model = ResFCN(in_channels=args.resfcn_in_channels, hidden_channels=args.resfcn_hidden_channels, out_channels=args.resfcn_out_channels, num_blocks=args.resfcn_num_blocks).to(device)
-    elif args.model.lower() == "pix2pix":
-        model = Pix2Pix(input_channels=args.pix2pix_in_channels, output_channels=args.pix2pix_out_channels, hidden_channels=args.pix2pix_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_second_loss_lambda)
+    if args.model.lower() == "residual_design_model":
+        model = ResidualDesignModel(base_model=get_model(model_name=args.base_model, args=args, criterion=criterion[0], device=device),
+                                    complex_model=get_model(model_name=args.complex_model+"_2", args=args, criterion=criterion[1], device=device),
+                                    combine_mode=args.combine_mode).to(device)
     else:
-        raise ValueError(f"'{args.model}' is not an supported model.")
+        model = get_model(model_name=args.model, args=args, criterion=criterion, device=device)
 
     # Optimizer
     if args.optimizer.lower() == "adam":
-        if args.model.lower() in ["pix2pix"]:
+        if args.model.lower() == "pix2pix":
             optimizer = [optim.Adam(model.generator.parameters(), lr=args.lr), 
                          optim.Adam(model.discriminator.parameters(), lr=args.lr)]
+        if args.model.lower() == "residual_design_model":
+            optimizer = [optim.Adam(model.base_model.parameters(), lr=args.lr),
+                         optim.Adam(model.complex_model.parameters(), lr=args.lr)]
         else:
             optimizer = optim.Adam(model.parameters(), lr=args.lr)
     else:
@@ -191,7 +288,7 @@ def train(args=None):
 
     # Scheduler
     if args.scheduler.lower() == "step":
-        if args.model.lower() in ["pix2pix"]:
+        if args.model.lower() in ["pix2pix", "residual_design_model"]:
             scheduler = [
                 optim.lr_scheduler.StepLR(optimizer[0], step_size=10, gamma=0.9),
                 optim.lr_scheduler.StepLR(optimizer[1], step_size=10, gamma=0.9)
@@ -272,6 +369,35 @@ def train(args=None):
             "save_path": args.save_path,
             "save_dir": args.save_dir,
             "cmap": args.cmap,
+
+            # >> Residual Model <<
+            "base_model": args.base_model,
+            "complex_model": args.complex_model,
+            "combine_mode": args.combine_mode,
+
+            # ---- Loss (2nd branch) ----
+            "loss_2": args.loss_2,
+            "wc_loss_silog_lambda_2": args.wc_loss_silog_lambda_2,
+            "wc_loss_weight_silog_2": args.wc_loss_weight_silog_2,
+            "wc_loss_weight_grad_2": args.wc_loss_weight_grad_2,
+            "wc_loss_weight_ssim_2": args.wc_loss_weight_ssim_2,
+            "wc_loss_weight_edge_aware_2": args.wc_loss_weight_edge_aware_2,
+            "wc_loss_weight_l1_2": args.wc_loss_weight_l1_2,
+            "wc_loss_weight_var_2": args.wc_loss_weight_var_2,
+            "wc_loss_weight_range_2": args.wc_loss_weight_range_2,
+            "wc_loss_weight_blur_2": args.wc_loss_weight_blur_2,
+
+            # ---- ResFCN Model 2 ----
+            "resfcn_2_in_channels": args.resfcn_2_in_channels,
+            "resfcn_2_hidden_channels": args.resfcn_2_hidden_channels,
+            "resfcn_2_out_channels": args.resfcn_2_out_channels,
+            "resfcn_2_num_blocks": args.resfcn_2_num_blocks,
+
+            # ---- Pix2Pix Model 2 ----
+            "pix2pix_2_in_channels": args.pix2pix_2_in_channels,
+            "pix2pix_2_hidden_channels": args.pix2pix_2_hidden_channels,
+            "pix2pix_2_out_channels": args.pix2pix_2_out_channels,
+            "pix2pix_2_second_loss_lambda": args.pix2pix_2_second_loss_lambda,
         })
 
         print(f"Train dataset size: {len(train_dataset)} | Validation dataset size: {len(val_dataset)}")
@@ -318,7 +444,7 @@ def train(args=None):
                 }, step=epoch)
 
                 # add sub losses / loss components
-                if args.model.lower() in ["pix2pix"]:
+                if args.model.lower() in ["pix2pix", "residual_design_model"]:
                     losses = model.get_dict()
                     for name, value in losses.items():
                         writer.add_scalar(f"LossComponents/{name}", value, epoch)

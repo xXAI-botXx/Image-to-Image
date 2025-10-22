@@ -188,7 +188,7 @@ class Pix2Pix(nn.Module):
         discriminator_fake = self.discriminator(x, fake_y)
 
         # calc loss -> 1: predictions = real, 0: predictions = fake
-        loss_real = self.adversarial_loss(discriminator_real, torch.ones_like(discriminator_real))
+        loss_real = self.adversarial_loss(discriminator_real, torch.ones_like(discriminator_real))  # torch.full_like(discriminator_real, 0.9)
         loss_fake = self.adversarial_loss(discriminator_fake, torch.zeros_like(discriminator_fake))
         loss_total = (loss_real + loss_fake) * 0.5
 

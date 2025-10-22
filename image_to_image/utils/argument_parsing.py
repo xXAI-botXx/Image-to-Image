@@ -110,7 +110,7 @@ def get_arg_parser():
     parser.add_argument('--output_dir', type=str, default='../../data/eval', help='Path to save the real and predicted Images.')
 
     # Model Loading
-    parser.add_argument('--model', type=str, default="resfcn", choices=['resfcn', 'pix2pix'],
+    parser.add_argument('--model', type=str, default="resfcn", choices=['resfcn', 'pix2pix', 'residual_design_model'],
                         help='Which Model should be choosen')
 
     # ---> ResFCN
@@ -124,6 +124,39 @@ def get_arg_parser():
     parser.add_argument('--pix2pix_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
     parser.add_argument('--pix2pix_out_channels', type=int, default=1, help='How much channels as output?')
     parser.add_argument('--pix2pix_second_loss_lambda', type=int, default=100, help='Weighting of second loss.')
+
+    # ---> Residual Design Model
+    parser.add_argument('--base_model', type=str, default="pix2pix", choices=['resfcn', 'pix2pix'],
+                        help='Model to predict base propagation.')
+    parser.add_argument('--complex_model', type=str, default="pix2pix", choices=['resfcn', 'pix2pix'],
+                        help='Model to predict complex part of propagation (e.g. only reflection).')
+    parser.add_argument('--combine_mode', type=str, default="nn", choices=['math', 'nn'],
+                        help='Using math calculation or CNN for combining sub predictions.')
+    
+    parser.add_argument('--loss_2', type=str, default='l1', choices=['l1', 'crossentropy', 'weighted_combined'],
+                        help='Loss Function.')
+    # ---> WeightedCombinedLoss parameters
+    parser.add_argument('--wc_loss_silog_lambda_2', type=float, default=0.5, help='Lambda parameter for SILog loss.')
+    parser.add_argument('--wc_loss_weight_silog_2', type=float, default=0.5, help='Weight for SILog loss.')
+    parser.add_argument('--wc_loss_weight_grad_2', type=float, default=10.0, help='Weight for gradient loss.')
+    parser.add_argument('--wc_loss_weight_ssim_2', type=float, default=5.0, help='Weight for SSIM loss.')
+    parser.add_argument('--wc_loss_weight_edge_aware_2', type=float, default=10.0, help='Weight for edge-aware loss.')
+    parser.add_argument('--wc_loss_weight_l1_2', type=float, default=1.0, help='Weight for L1 loss.')
+    parser.add_argument('--wc_loss_weight_var_2', type=float, default=1.0, help='Weight for variance loss.')
+    parser.add_argument('--wc_loss_weight_range_2', type=float, default=1.0, help='Weight for range loss.')
+    parser.add_argument('--wc_loss_weight_blur_2', type=float, default=1.0, help='Weight for blur loss.')
+    
+    # ---> ResFCN Model 2
+    parser.add_argument('--resfcn_2_in_channels', type=int, default=1, help='How much channels as input?')
+    parser.add_argument('--resfcn_2_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
+    parser.add_argument('--resfcn_2_out_channels', type=int, default=1, help='How much channels as output?')
+    parser.add_argument('--resfcn_2_num_blocks', type=int, default=16, help='How many Residual Blocks should be stacked.')
+
+    # ---> Pix2Pix Model 2
+    parser.add_argument('--pix2pix_2_in_channels', type=int, default=1, help='How much channels as input?')
+    parser.add_argument('--pix2pix_2_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
+    parser.add_argument('--pix2pix_2_out_channels', type=int, default=1, help='How much channels as output?')
+    parser.add_argument('--pix2pix_2_second_loss_lambda', type=int, default=100, help='Weighting of second loss.')
 
     # Data
     # parser.add_argument('--data_mode', type=str, default='train',
@@ -150,6 +183,7 @@ def get_arg_parser():
     parser.add_argument('--tensorboard_path', type=str, default="../tensorboard", help='Where should the results from tensorboard be saved to?')
     parser.add_argument('--save_path', type=str, default="../train_inference", help='Where should the results from your model be saved to?')
     parser.add_argument('--cmap', type=str, default="gray", help='Color Map for saving images.')
+
 
 
     return parser
