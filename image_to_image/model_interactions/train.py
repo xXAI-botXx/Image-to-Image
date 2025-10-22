@@ -3,6 +3,7 @@
 # ---------------------------
 import os
 import time
+import copy
 
 import matplotlib.pyplot as plt
 
@@ -22,7 +23,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from ..utils.argument_parsing import parse_args
 from ..data.physgen import PhysGenDataset
-from ..models.resfcn import ResFCN 
+from ..models.resfcn import ResFCN
+from ..models.pix2pix import Pix2Pix
 from ..losses.weighted_combined_loss import WeightedCombinedLoss
 
 
@@ -31,7 +33,7 @@ from ..losses.weighted_combined_loss import WeightedCombinedLoss
 #      > Train Helpers <
 # ---------------------------
 
-def train_one_epoch(model, loader, optimizer, criterion, device, scaler=None):
+def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, scaler=None):
     # change to train mode -> calc gradients
     model.train()
 
@@ -39,10 +41,14 @@ def train_one_epoch(model, loader, optimizer, criterion, device, scaler=None):
     for x, y in tqdm(loader, desc="Training", leave=False):
         x, y = x.to(device), y.to(device)
 
-        # reset gradients 
-        optimizer.zero_grad()
+        if isinstance(model, Pix2Pix):
+            if epoch is None or epoch % 2 == 0:
+                model.discriminator_step(x, y, optimizer[1], scaler)
+            loss, _, _ = model.generator_step(x, y, optimizer[0], scaler)
+        elif scaler:
+            # reset gradients 
+            optimizer.zero_grad()
 
-        if scaler:
             with autocast():
                 y_predict = model(x)
                 loss = criterion(y_predict, y)
@@ -50,6 +56,9 @@ def train_one_epoch(model, loader, optimizer, criterion, device, scaler=None):
             scaler.step(optimizer)
             scaler.update()
         else:
+            # reset gradients 
+            optimizer.zero_grad()
+
             y_predict = model(x)
             loss = criterion(y_predict, y)
             loss.backward()
@@ -76,9 +85,16 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
                 # Convert to grid
                 img_grid_input = torchvision.utils.make_grid(x[:4].cpu(), normalize=True, scale_each=True)
                 max_val = max(y_predict.max().item(), 1e-8)
-                img_grid_pred = torchvision.utils.make_grid(y_predict[:4].unsqueeze(1).float().cpu() / max_val)
+                if y_predict.ndim == 3:  # e.g., [B, H, W]
+                    img_grid_pred = torchvision.utils.make_grid(y_predict[:4].unsqueeze(1).float().cpu() / max_val)
+                else:  # [B, 1, H, W]
+                    img_grid_pred = torchvision.utils.make_grid(y_predict[:4].float().cpu() / max_val)
+
                 max_val = max(y.max().item(), 1e-8)
-                img_grid_gt = torchvision.utils.make_grid(y[:4].unsqueeze(1).float().cpu() / max_val)
+                if img_grid_gt.ndim == 3:
+                    img_grid_gt = torchvision.utils.make_grid(y[:4].unsqueeze(1).float().cpu() / max_val)
+                else:
+                    img_grid_gt = torchvision.utils.make_grid(y[:4].float().cpu() / max_val)
 
                 # Log to TensorBoard
                 writer.add_image("Input", img_grid_input, epoch)
@@ -135,15 +151,12 @@ def train(args=None):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size)
 
-    # Model Loading
-    model = ResFCN(in_channels=args.resfcn_in_channels, hidden_channels=args.resfcn_hidden_channels, out_channels=args.resfcn_out_channels, num_blocks=args.resfcn_num_blocks).to(device)
-
     # Loss
-    if args.loss == "l1":
+    if args.loss.lower() == "l1":
         criterion = nn.L1Loss()
-    elif args.loss == "crossentropy":
+    elif args.loss.lower() == "crossentropy":
         criterion = nn.CrossEntropyLoss()
-    elif args.loss == "weighted_combined":
+    elif args.loss.lower() == "weighted_combined":
         criterion = WeightedCombinedLoss( 
                         silog_lambda=args.wc_loss_silog_lambda, 
                         weight_silog=args.wc_loss_weight_silog, 
@@ -158,22 +171,40 @@ def train(args=None):
     else:
         raise ValueError(f"'{args.loss}' is not an supported loss.")
 
+    # Model Loading
+    if args.model.lower() == "resfcn":
+        model = ResFCN(in_channels=args.resfcn_in_channels, hidden_channels=args.resfcn_hidden_channels, out_channels=args.resfcn_out_channels, num_blocks=args.resfcn_num_blocks).to(device)
+    elif args.model.lower() == "pix2pix":
+        model = Pix2Pix(input_channels=args.pix2pix_in_channels, output_channels=args.pix2pix_out_channels, hidden_channels=args.pix2pix_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_second_loss_lambda)
+    else:
+        raise ValueError(f"'{args.model}' is not an supported model.")
+
     # Optimizer
-    if args.optimizer == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    if args.optimizer.lower() == "adam":
+        if args.model.lower() in ["pix2pix"]:
+            optimizer = [optim.Adam(model.generator.parameters(), lr=args.lr), 
+                         optim.Adam(model.discriminator.parameters(), lr=args.lr)]
+        else:
+            optimizer = optim.Adam(model.parameters(), lr=args.lr)
     else:
         raise ValueError(f"'{args.optimizer}' is not an supported optimizer.")
 
     # Scheduler
-    if args.scheduler == "step":
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
+    if args.scheduler.lower() == "step":
+        if args.model.lower() in ["pix2pix"]:
+            scheduler = [
+                optim.lr_scheduler.StepLR(optimizer[0], step_size=10, gamma=0.9),
+                optim.lr_scheduler.StepLR(optimizer[1], step_size=10, gamma=0.9)
+            ]
+        else:
+            scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
     else:
         raise ValueError(f"'{args.scheduler}' is not an supported scheduler.")
 
     # Scaler
-    if args.scaler == None:
+    if args.scaler is None:
         scaler = None
-    elif args.scaler == "grad":
+    elif args.scaler.lower() == "grad":
         scaler = GradScaler()
     else:
         raise ValueError(f"'{args.scaler}' is not an supported scaler.")
@@ -222,6 +253,11 @@ def train(args=None):
             "resfcn_out_channels": args.resfcn_out_channels,
             "resfcn_num_blocks": args.resfcn_num_blocks,
 
+            "pix2pix_in_channels": args.pix2pix_in_channels,
+            "pix2pix_hidden_channels": args.pix2pix_hidden_channels,
+            "pix2pix_out_channels": args.pix2pix_out_channels,
+            "pix2pix_second_loss_lambda": args.pix2pix_second_loss_lambda,
+
             # Data
             "data_variation": args.data_variation,
             "input_type": args.input_type,
@@ -251,7 +287,7 @@ def train(args=None):
         try:
             for epoch in range(1, args.epochs + 1):
                 start_time = time.time()
-                train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler)
+                train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, epoch, scaler)
                 duration = time.time() - start_time
                 if epoch % 10 == 0:
                     val_loss = evaluate(model, val_loader, criterion, device, writer=writer, epoch=epoch, save_path=args.save_path, cmap=args.cmap)
@@ -268,7 +304,11 @@ def train(args=None):
                 writer.add_scalar("Time/epoch_duration", duration, epoch)
                 writer.add_scalar("Loss/train", train_loss, epoch)
                 writer.add_scalar("Loss/val", val_loss, epoch)
-                writer.add_scalar("LR", scheduler.get_last_lr()[0], epoch)
+                if isinstance(scheduler, list):
+                    writer.add_scalar("LR/generator", scheduler[0].get_last_lr()[0], epoch)
+                    writer.add_scalar("LR/discriminator", scheduler[1].get_last_lr()[0], epoch)
+                else:
+                    writer.add_scalar("LR", scheduler.get_last_lr()[0], epoch)
 
                 # Log to MLflow
                 mlflow.log_metrics({
@@ -277,15 +317,27 @@ def train(args=None):
                     "lr": scheduler.get_last_lr()[0]
                 }, step=epoch)
 
-                if args.loss == "weighted_combined":
+                # add sub losses / loss components
+                if args.model.lower() in ["pix2pix"]:
+                    losses = model.get_dict()
+                    for name, value in losses.items():
+                        writer.add_scalar(f"LossComponents/{name}", value, epoch)
+                    mlflow.log_metrics(losses, step=epoch)
+
+                if args.loss in ["weighted_combined"]:
                     losses = criterion.get_dict()
                     for name, value in losses.items():
                         writer.add_scalar(f"LossComponents/{name}", value, epoch)
                     mlflow.log_metrics(losses, step=epoch)
 
-                scheduler.step()
+                # Step scheduler
+                if args.model.lower() in ["pix2pix"]:
+                    scheduler[0].step()
+                    scheduler[1].step()
+                else:
+                    scheduler.step()
 
-                # Checkpoint speichern
+                # Save Checkpoint
                 if epoch % 10 == 0:
                     checkpoint_path = os.path.join(args.save_dir, f"epoch_{epoch}.pth")
                     save_checkpoint(model, optimizer, scheduler, epoch, checkpoint_path)

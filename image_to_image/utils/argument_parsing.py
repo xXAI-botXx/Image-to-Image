@@ -110,7 +110,7 @@ def get_arg_parser():
     parser.add_argument('--output_dir', type=str, default='../../data/eval', help='Path to save the real and predicted Images.')
 
     # Model Loading
-    parser.add_argument('--model', type=str, default="resfcn", choices=['resfcn'],
+    parser.add_argument('--model', type=str, default="resfcn", choices=['resfcn', 'pix2pix'],
                         help='Which Model should be choosen')
 
     # ---> ResFCN
@@ -118,6 +118,12 @@ def get_arg_parser():
     parser.add_argument('--resfcn_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
     parser.add_argument('--resfcn_out_channels', type=int, default=1, help='How much channels as output?')
     parser.add_argument('--resfcn_num_blocks', type=int, default=16, help='How many Residual Blocks should be stacked.')
+
+    # ---> Pix2Pix
+    parser.add_argument('--pix2pix_in_channels', type=int, default=1, help='How much channels as input?')
+    parser.add_argument('--pix2pix_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
+    parser.add_argument('--pix2pix_out_channels', type=int, default=1, help='How much channels as output?')
+    parser.add_argument('--pix2pix_second_loss_lambda', type=int, default=100, help='Weighting of second loss.')
 
     # Data
     # parser.add_argument('--data_mode', type=str, default='train',

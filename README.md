@@ -154,6 +154,10 @@ python -m main \
   --scaler grad \
   --save_dir ./checkpoints \
   --model pix2pix \
+  --pix2pix_in_channels 1 \
+  --pix2pix_hidden_channels 64 \
+  --pix2pix_out_channels 1 \
+  --pix2pix_second_loss_lambda 100 \
   --data_variation sound_reflection \
   --input_type osm \
   --output_type standard \
