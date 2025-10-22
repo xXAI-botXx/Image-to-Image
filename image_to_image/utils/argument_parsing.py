@@ -81,8 +81,19 @@ def get_arg_parser():
     parser.add_argument('--epochs', type=int, default=50, help='Amount of whole data loops.')
     parser.add_argument('--batch_size', type=int, default=8, help='Size of a batch, data is processed in batches (smaller packages) and the GPU processes then one batch at a time.')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learnrate of adjusting the weights towards the gradients.')
-    parser.add_argument('--loss', type=str, default='l1', choices=['l1', 'crossentropy'],
+    parser.add_argument('--loss', type=str, default='l1', choices=['l1', 'crossentropy', 'weighted_combined'],
                         help='Loss Function.')
+    # ---> WeightedCombinedLoss parameters
+    parser.add_argument('--wc_loss_silog_lambda', type=float, default=0.5, help='Lambda parameter for SILog loss.')
+    parser.add_argument('--wc_loss_weight_silog', type=float, default=0.5, help='Weight for SILog loss.')
+    parser.add_argument('--wc_loss_weight_grad', type=float, default=10.0, help='Weight for gradient loss.')
+    parser.add_argument('--wc_loss_weight_ssim', type=float, default=5.0, help='Weight for SSIM loss.')
+    parser.add_argument('--wc_loss_weight_edge_aware', type=float, default=10.0, help='Weight for edge-aware loss.')
+    parser.add_argument('--wc_loss_weight_l1', type=float, default=1.0, help='Weight for L1 loss.')
+    parser.add_argument('--wc_loss_weight_var', type=float, default=1.0, help='Weight for variance loss.')
+    parser.add_argument('--wc_loss_weight_range', type=float, default=1.0, help='Weight for range loss.')
+    parser.add_argument('--wc_loss_weight_blur', type=float, default=1.0, help='Weight for blur loss.')
+
     parser.add_argument('--optimizer', type=str, default="adam", choices=['adam'],
                         help='Optimizer, which decides how exactly to calculate the loss and weight gradients.')
     parser.add_argument('--scheduler', type=str, default="step", choices=['step'],

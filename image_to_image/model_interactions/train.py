@@ -23,6 +23,7 @@ from torch.utils.tensorboard import SummaryWriter
 from ..utils.argument_parsing import parse_args
 from ..data.physgen import PhysGenDataset
 from ..models.resfcn import ResFCN 
+from ..losses.weighted_combined_loss import WeightedCombinedLoss
 
 
 
@@ -142,6 +143,19 @@ def train(args=None):
         criterion = nn.L1Loss()
     elif args.loss == "crossentropy":
         criterion = nn.CrossEntropyLoss()
+    elif args.loss == "weighted_combined":
+        criterion = WeightedCombinedLoss( 
+                        silog_lambda=args.wc_loss_silog_lambda, 
+                        weight_silog=args.wc_loss_weight_silog, 
+                        weight_grad=args.wc_loss_weight_grad,
+                        weight_ssim=args.wc_loss_weight_ssim,
+                        weight_edge_aware=args.wc_loss_weight_edge_aware,
+                        weight_l1=args.wc_loss_weight_l1,
+                        weight_var=args.wc_loss_weight_var,
+                        weight_range=args.wc_loss_weight_range,
+                        weight_blur=args.wc_loss_weight_blur
+                    )    
+    else:
         raise ValueError(f"'{args.loss}' is not an supported loss.")
 
     # Optimizer
@@ -190,6 +204,17 @@ def train(args=None):
             "scheduler": args.scheduler,
             "scaler": args.scaler,
 
+            # Loss
+            "wc_loss_silog_lambda": args.wc_loss_silog_lambda,
+            "wc_loss_weight_silog": args.wc_loss_weight_silog,
+            "wc_loss_weight_grad": args.wc_loss_weight_grad,
+            "wc_loss_weight_ssim": args.wc_loss_weight_ssim,
+            "wc_loss_weight_edge_aware": args.wc_loss_weight_edge_aware,
+            "wc_loss_weight_l1": args.wc_loss_weight_l1,
+            "wc_loss_weight_var": args.wc_loss_weight_var,
+            "wc_loss_weight_range": args.wc_loss_weight_range,
+            "wc_loss_weight_blur": args.wc_loss_weight_blur,
+
             # Model
             "model": args.model,
             "resfcn_in_channels": args.resfcn_in_channels,
@@ -230,10 +255,15 @@ def train(args=None):
                 duration = time.time() - start_time
                 if epoch % 10 == 0:
                     val_loss = evaluate(model, val_loader, criterion, device, writer=writer, epoch=epoch, save_path=args.save_path, cmap=args.cmap)
+                else:
+                    val_loss = float("nan")
 
+                val_str = f"{val_loss:.4f}" if epoch % 10 == 0 else "N/A"
                 print(f"[Epoch {epoch:02}/{args.epochs}] Train Loss: {train_loss:.4f} | "
-                    f"Val Loss: {val_loss:.4f} | Time: {duration:.2f}")
+                      f"Val Loss: {val_str} | Time: {duration:.2f}")
                 
+                # Hint: Tensorboard and mlflow does not like spaces in tags!
+
                 # Log to TensorBoard
                 writer.add_scalar("Time/epoch_duration", duration, epoch)
                 writer.add_scalar("Loss/train", train_loss, epoch)
@@ -246,6 +276,12 @@ def train(args=None):
                     "val_loss": val_loss,
                     "lr": scheduler.get_last_lr()[0]
                 }, step=epoch)
+
+                if args.loss == "weighted_combined":
+                    losses = criterion.get_dict()
+                    for name, value in losses.items():
+                        writer.add_scalar(f"LossComponents/{name}", value, epoch)
+                    mlflow.log_metrics(losses, step=epoch)
 
                 scheduler.step()
 

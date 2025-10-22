@@ -10,7 +10,13 @@ Data References:
 Content:
 - [Installation](#installation)
 - [Example Commands](#example-commands)
+- [Experiment Commands](#experiment-commands)
 - [Access Experiment Tracking](#access-experiment-tracking)
+
+
+
+> For the Physgen benchmark, you have to first train your model, then open the [Evaluation Physgen-Benchmark Notebook](./image_to_image/model_interactions/eval_physgen_benchmark.ipynb) and run the commands (and adjust the parameters there). 
+
 
 <br>
 <br>
@@ -119,6 +125,83 @@ python -m main \
 > In windows you have to use ``` for the line breaks or remove the line breaks completly. Or you use Linux via Docker.
 
 > You can also use: `python -m main --help` for help.
+
+<br>
+<br>
+
+---
+### Experiment Commands
+
+Pix2Pix Rebuild:
+```bash
+python -m main \
+  --mode train \
+  --epochs 100 \
+  --batch_size 16 \
+  --lr 0.0001 \
+  --loss weighted_combined \
+  --wc_loss_silog_lambda 0.5 \
+  --wc_loss_weight_silog 1.0 \
+  --wc_loss_weight_grad 50.0 \
+  --wc_loss_weight_ssim 100.0 \
+  --wc_loss_weight_edge_aware 50.0 \
+  --wc_loss_weight_l1 10.0 \
+  --wc_loss_weight_var 0.0 \
+  --wc_loss_weight_range 0.0 \
+  --wc_loss_weight_blur 0.0 \
+  --optimizer adam \
+  --scheduler step \
+  --scaler grad \
+  --save_dir ./checkpoints \
+  --model pix2pix \
+  --data_variation sound_reflection \
+  --input_type osm \
+  --output_type standard \
+  --device cuda \
+  --experiment_name image-to-image \
+  --run_name pix2pix_rebuild_test \
+  --tensorboard_path ./tensorboard \
+  --save_path ./mlflow_images \
+  --cmap gray
+```
+
+New Simple Model try out:
+```bash
+python -m main \
+  --mode train \
+  --epochs 100 \
+  --batch_size 16 \
+  --lr 0.0001 \
+  --loss weighted_combined \
+  --wc_loss_silog_lambda 0.5 \
+  --wc_loss_weight_silog 1.0 \
+  --wc_loss_weight_grad 50.0 \
+  --wc_loss_weight_ssim 100.0 \
+  --wc_loss_weight_edge_aware 50.0 \
+  --wc_loss_weight_l1 10.0 \
+  --wc_loss_weight_var 0.0 \
+  --wc_loss_weight_range 0.0 \
+  --wc_loss_weight_blur 0.0 \
+  --optimizer adam \
+  --scheduler step \
+  --scaler grad \
+  --save_dir ./checkpoints \
+  --model resfcn \
+  --resfcn_in_channels 1 \
+  --resfcn_hidden_channels 64 \
+  --resfcn_out_channels 1 \
+  --resfcn_num_blocks 16 \
+  --data_variation sound_reflection \
+  --input_type osm \
+  --output_type standard \
+  --device cuda \
+  --experiment_name image-to-image \
+  --run_name resfcn_weighted_combined_test \
+  --tensorboard_path ./tensorboard \
+  --save_path ./mlflow_images \
+  --cmap gray
+```
+
 
 
 <br>
