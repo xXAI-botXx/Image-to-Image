@@ -1,18 +1,87 @@
+# ---------------------------
+#        > Imports <
+# ---------------------------
 import argparse
+import textwrap
 
 
+
+# ---------------------------
+#     > Argument Parser <
+# ---------------------------
 def get_arg_parser():
-    parser = argparse.ArgumentParser(description="Image-to-Image Framework")
+    parser = argparse.ArgumentParser(
+        description="Image-to-Image Framework - train and inferencing",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent("""
+        Example commands:
+
+        Training:
+          python -m main \\
+            --mode train \\
+            --epochs 100 \\
+            --batch_size 16 \\
+            --lr 0.0001 \\
+            --loss l1 \\
+            --optimizer adam \\
+            --scheduler step \\
+            --scaler grad \\
+            --save_dir ./checkpoints \\
+            --model resfcn \\
+            --resfcn_in_channels 1 \\
+            --resfcn_hidden_channels 64 \\
+            --resfcn_out_channels 1 \\
+            --resfcn_num_blocks 16 \\
+            --data_variation sound_reflection \\
+            --input_type osm \\
+            --output_type standard \\
+            --device cuda \\
+            --experiment_name image-to-image \\
+            --run_name resfcn_test \\
+            --tensorboard_path ./tensorboard \\
+            --save_path ./mlflow_images \\
+            --cmap gray
+
+        Testing:
+          python -m main \\
+            --mode test \\
+            --batch_size 16 \\
+            --loss l1 \\
+            --model resfcn \\
+            --model_params_path ./checkpoints/my_model.pth \\
+            --resfcn_in_channels 1 \\
+            --resfcn_hidden_channels 64 \\
+            --resfcn_out_channels 1 \\
+            --resfcn_num_blocks 16 \\
+            --data_variation sound_reflection \\
+            --input_type osm \\
+            --output_type standard \\
+            --device cuda
+
+        Inference:
+          python -m main \\
+            --mode inference \\
+            --batch_size 16 \\
+            --model resfcn \\
+            --model_params_path ./checkpoints/my_model.pth \\
+            --resfcn_in_channels 1 \\
+            --resfcn_hidden_channels 64 \\
+            --resfcn_out_channels 1 \\
+            --resfcn_num_blocks 16 \\
+            --input_dir_path ./data/dataset \\
+            --device cuda
+        """)
+        )
 
     # General Parameter
-    parser.add_argument('--mode', type=str, default='train', choices=['train', 'test', 'inference', 'physgen_benchmark'],
-                        help='Modus: train, test oder inference')
+    parser.add_argument('--mode', type=str, default='train', choices=['train', 'test', 'inference'],
+                        help='Modus: train, test or inference')
 
     # Trainingsparameter
     parser.add_argument('--epochs', type=int, default=50, help='Amount of whole data loops.')
     parser.add_argument('--batch_size', type=int, default=8, help='Size of a batch, data is processed in batches (smaller packages) and the GPU processes then one batch at a time.')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learnrate of adjusting the weights towards the gradients.')
-    parser.add_argument('--loss', type=str, default='l1', choices=['l1'],
+    parser.add_argument('--loss', type=str, default='l1', choices=['l1', 'crossentropy'],
                         help='Loss Function.')
     parser.add_argument('--optimizer', type=str, default="adam", choices=['adam'],
                         help='Optimizer, which decides how exactly to calculate the loss and weight gradients.')
@@ -26,6 +95,7 @@ def get_arg_parser():
 
     # Inference
     parser.add_argument('--model_params_path', type=str, required=False, help='Path to the model checkpoints.')
+    parser.add_argument('--image_dir_path', type=str, default=None, required=False, help='Path to folder with images for inference.')
     parser.add_argument('--output_dir', type=str, default='../../data/eval', help='Path to save the real and predicted Images.')
 
     # Model Loading
@@ -69,6 +139,9 @@ def get_arg_parser():
 
 
 
+# ---------------------------
+#     > Get Arguments <
+# ---------------------------
 def parse_args():
     parser = get_arg_parser()
     args = parser.parse_args()

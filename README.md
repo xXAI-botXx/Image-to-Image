@@ -1,6 +1,21 @@
 # Image-to-Image
-An Image-to-Image PyTorch repo.
+An Image-to-Image PyTorch repo. Primary done for PhysGen/Urban Noise Dataset.
 
+Data References:
+- [Dataset](https://arxiv.org/abs/2403.10904v2)
+- [Main Paper / comparison](https://arxiv.org/abs/2503.05333)
+- [Normalizing Flow Approach](https://www.arxiv.org/pdf/2510.04510)
+
+
+Content:
+- [Installation](#installation)
+- [Example Commands](#example-commands)
+- [Access Experiment Tracking](#access-experiment-tracking)
+
+<br>
+<br>
+
+---
 ### Installation
 
 ```bash
@@ -8,47 +23,108 @@ conda create -n img-to-img python=3.13 pip -y
 conda activate img-to-img
 pip install -r requirements.txt
 
-torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 ```
 
 Use your CUDA needed. You may want to check with `nvidia-smi`.
 
+<br>
+<br>
+
+---
 ### Example Commands
 
 **Training run**
 ```bash
-FIXME
-python -m main.py \
+python -m main \
   --mode train \
-  --variation sound_baseline \
-  --data_dir ./datasets/trainset \
+  --epochs 100 \
+  --batch_size 16 \
+  --lr 0.0001 \
+  --loss l1 \
+  --optimizer adam \
+  --scheduler step \
+  --scaler grad \
   --save_dir ./checkpoints \
-  --epochs 100 --batch_size 16 --lr 0.0001 \
+  --model resfcn \
+  --resfcn_in_channels 1 \
+  --resfcn_hidden_channels 64 \
+  --resfcn_out_channels 1 \
+  --resfcn_num_blocks 16 \
+  --data_variation sound_reflection \
+  --input_type osm \
+  --output_type standard \
+  --device cuda \
+  --experiment_name image-to-image \
+  --run_name resfcn_test \
+  --tensorboard_path ./tensorboard \
+  --save_path ./mlflow_images \
+  --cmap gray
 ```
 
 
 **Testing**
 ```bash
-FIXME
-
-python -m main.py \
+python -m main \
   --mode test \
-  --checkpoint ./checkpoints/epoch_50.pth
+  --batch_size 16 \
+  --loss l1 \
+  --model resfcn \
+  --model_params_path ./checkpoints/my_model.pth \
+  --resfcn_in_channels 1 \
+  --resfcn_hidden_channels 64 \
+  --resfcn_out_channels 1 \
+  --resfcn_num_blocks 16 \
+  --data_variation sound_reflection \
+  --input_type osm \
+  --output_type standard \
+  --device cuda
 ```
 
 
 **Inference**
 ```bash
-FIXME
-python -m main.py \
+python -m main \
   --mode inference \
-  --input_dir ./samples \
-  --output_dir ./results \
-  --checkpoint ./checkpoints/best_model.pth
+  --batch_size 16 \
+  --model resfcn \
+  --model_params_path ./checkpoints/my_model.pth \
+  --resfcn_in_channels 1 \
+  --resfcn_hidden_channels 64 \
+  --resfcn_out_channels 1 \
+  --resfcn_num_blocks 16 \
+  --data_variation sound_reflection \
+  --input_type osm \
+  --output_type standard \
+  --device cuda
+```
+
+Or custom data inference:
+
+```bash
+python -m main \
+  --mode inference \
+  --batch_size 16 \
+  --model resfcn \
+  --model_params_path ./checkpoints/my_model.pth \
+  --resfcn_in_channels 1 \
+  --resfcn_hidden_channels 64 \
+  --resfcn_out_channels 1 \
+  --resfcn_num_blocks 16 \
+  --image_dir_path ./data/dataset \
+  --device cuda
 ```
 
 
+> In windows you have to use ``` for the line breaks or remove the line breaks completly. Or you use Linux via Docker.
 
+> You can also use: `python -m main --help` for help.
+
+
+<br>
+<br>
+
+---
 ### Access Experiment Tracking
 
 In order to see the history of previous trainings you can start tensorboard of mlflow. Both start a local server which can be acces over an address which is very handy because they often are stored on another device and so can be viewed over SSH.<br>

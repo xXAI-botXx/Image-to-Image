@@ -2,8 +2,11 @@
 #        > Imports <
 # ---------------------------
 import os
+import time
 
 import matplotlib.pyplot as plt
+
+from tqdm import tqdm
 
 import torch
 from torch import nn, optim
@@ -32,7 +35,7 @@ def train_one_epoch(model, loader, optimizer, criterion, device, scaler=None):
     model.train()
 
     total_loss = 0.0
-    for x, y in loader:
+    for x, y in tqdm(loader, desc="Training", leave=False):
         x, y = x.to(device), y.to(device)
 
         # reset gradients 
@@ -60,32 +63,36 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
     model.eval()
 
     total_loss = 0.0
-    
+    is_first_round = True
 
-    for x, y in loader:
+    for x, y in tqdm(loader, desc="Evaluating", leave=False):
         x, y = x.to(device), y.to(device)
         y_predict = model(x)
         total_loss += criterion(y_predict, y).item()
 
+        if is_first_round:
+            if writer:
+                # Convert to grid
+                img_grid_input = torchvision.utils.make_grid(x[:4].cpu(), normalize=True, scale_each=True)
+                max_val = max(y_predict.max().item(), 1e-8)
+                img_grid_pred = torchvision.utils.make_grid(y_predict[:4].unsqueeze(1).float().cpu() / max_val)
+                max_val = max(y.max().item(), 1e-8)
+                img_grid_gt = torchvision.utils.make_grid(y[:4].unsqueeze(1).float().cpu() / max_val)
 
-        if writer:
-            # Convert to grid
-            img_grid_input = torchvision.utils.make_grid(x[:4].cpu(), normalize=True, scale_each=True)
-            img_grid_pred = torchvision.utils.make_grid(y_predict[:4].unsqueeze(1).float().cpu() / y_predict.max().item())
-            img_grid_gt = torchvision.utils.make_grid(y[:4].unsqueeze(1).float().cpu() / y.max().item())
+                # Log to TensorBoard
+                writer.add_image("Input", img_grid_input, epoch)
+                writer.add_image("Prediction", img_grid_pred, epoch)
+                writer.add_image("GroundTruth", img_grid_gt, epoch)
 
-            # Log to TensorBoard
-            writer.add_image("Input", img_grid_input, epoch)
-            writer.add_image("Prediction", img_grid_pred, epoch)
-            writer.add_image("GroundTruth", img_grid_gt, epoch)
-
-        if save_path:
-            plt.imsave(os.path.join(save_path, f"{epoch}_prediction.png"), 
-                       y_predict[0].detach().cpu().numpy().squeeze(), cmap=cmap)
-            plt.imsave(os.path.join(save_path, f"{epoch}_input.png"), 
-                       x[0][0].detach().cpu().numpy().squeeze(), cmap=cmap)
-            plt.imsave(os.path.join(save_path, f"{epoch}_ground_truth.png"), 
-                       y[0].detach().cpu().numpy().squeeze(), cmap=cmap)
+            if save_path:
+                plt.imsave(os.path.join(save_path, f"{epoch}_prediction.png"), 
+                        y_predict[0].detach().cpu().numpy().squeeze(), cmap=cmap)
+                plt.imsave(os.path.join(save_path, f"{epoch}_input.png"), 
+                        x[0][0].detach().cpu().numpy().squeeze(), cmap=cmap)
+                plt.imsave(os.path.join(save_path, f"{epoch}_ground_truth.png"), 
+                        y[0].detach().cpu().numpy().squeeze(), cmap=cmap)
+                
+        is_first_round = False
 
     return total_loss / len(loader)
 
@@ -110,6 +117,8 @@ def save_checkpoint(model, optimizer, scheduler, epoch, path='ckpt.pth'):
 #        > Train Main <
 # ---------------------------
 def train(args=None):
+    print("\n---> Welcome to Image-to-Image Training <---")
+
     # Parse arguments
     if args is None:
         args = parse_args()
@@ -130,8 +139,9 @@ def train(args=None):
 
     # Loss
     if args.loss == "l1":
+        criterion = nn.L1Loss()
+    elif args.loss == "crossentropy":
         criterion = nn.CrossEntropyLoss()
-    else:
         raise ValueError(f"'{args.loss}' is not an supported loss.")
 
     # Optimizer
@@ -164,58 +174,96 @@ def train(args=None):
     # Start MLflow run
     with mlflow.start_run(run_name=args.run_name):
 
-        mlflow.pytorch.log_model(model, args.model)
-
         # Log hyperparameters
+        # mlflow.log_params(vars(args))
         mlflow.log_params({
-            "batch_size": args.batch_size,
-            "lr": args.lr,
-            "epochs": args.epochs,
+            # General
+            "mode": args.mode,
             "device": str(device),
-            "variation": args.data_variation,
-            "model": args.model
+
+            # Training
+            "epochs": args.epochs,
+            "batch_size": args.batch_size,
+            "learning_rate": args.lr,
+            "loss_function": args.loss,
+            "optimizer": args.optimizer,
+            "scheduler": args.scheduler,
+            "scaler": args.scaler,
+
+            # Model
+            "model": args.model,
+            "resfcn_in_channels": args.resfcn_in_channels,
+            "resfcn_hidden_channels": args.resfcn_hidden_channels,
+            "resfcn_out_channels": args.resfcn_out_channels,
+            "resfcn_num_blocks": args.resfcn_num_blocks,
+
+            # Data
+            "data_variation": args.data_variation,
+            "input_type": args.input_type,
+            "output_type": args.output_type,
+            "fake_rgb_output": args.fake_rgb_output,
+            "make_14_dividable_size": args.make_14_dividable_size,
+
+            # Experiment tracking
+            "experiment_name": args.experiment_name,
+            "run_name": args.run_name,
+            "tensorboard_path": args.tensorboard_path,
+            "save_path": args.save_path,
+            "save_dir": args.save_dir,
+            "cmap": args.cmap,
+        })
+
+        print(f"Train dataset size: {len(train_dataset)} | Validation dataset size: {len(val_dataset)}")
+        mlflow.log_metrics({
+            "train_dataset_size": len(train_dataset),
+            "val_dataset_size": len(val_dataset)
         })
 
         # TensorBoard writer
         writer = SummaryWriter(log_dir=args.tensorboard_path)
 
         # Run Training
-        for epoch in range(1, args.epochs + 1):
-            train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler)
-            if epoch % 10 == 0:
-                val_loss, val_acc = evaluate(model, val_loader, criterion, device, writer=writer, epoch=epoch, save_path=args.save_path, cmap=args.cmap)
+        try:
+            for epoch in range(1, args.epochs + 1):
+                start_time = time.time()
+                train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler)
+                duration = time.time() - start_time
+                if epoch % 10 == 0:
+                    val_loss = evaluate(model, val_loader, criterion, device, writer=writer, epoch=epoch, save_path=args.save_path, cmap=args.cmap)
 
-            print(f"[Epoch {epoch}/{args.epochs}] Train Loss: {train_loss:.4f} | "
-                f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
-            
-            # Log to TensorBoard
-            writer.add_scalar("Loss/train", train_loss, epoch)
-            writer.add_scalar("Loss/val", val_loss, epoch)
-            writer.add_scalar("Accuracy/val", val_acc, epoch)
-            writer.add_scalar("LR", scheduler.get_last_lr()[0], epoch)
+                print(f"[Epoch {epoch:02}/{args.epochs}] Train Loss: {train_loss:.4f} | "
+                    f"Val Loss: {val_loss:.4f} | Time: {duration:.2f}")
+                
+                # Log to TensorBoard
+                writer.add_scalar("Time/epoch_duration", duration, epoch)
+                writer.add_scalar("Loss/train", train_loss, epoch)
+                writer.add_scalar("Loss/val", val_loss, epoch)
+                writer.add_scalar("LR", scheduler.get_last_lr()[0], epoch)
 
-            # Log to MLflow
-            mlflow.log_metrics({
-                "train_loss": train_loss,
-                "val_loss": val_loss,
-                "val_acc": val_acc,
-                "lr": scheduler.get_last_lr()[0]
-            }, step=epoch)
+                # Log to MLflow
+                mlflow.log_metrics({
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                    "lr": scheduler.get_last_lr()[0]
+                }, step=epoch)
 
-            scheduler.step()
+                scheduler.step()
 
-            # Checkpoint speichern
-            if epoch % 10 == 0:
-                ckeckpoint_path = os.path.join(args.save_dir, f"epoch_{epoch}.pth")
-                save_checkpoint(model, optimizer, scheduler, epoch, ckeckpoint_path)
+                # Checkpoint speichern
+                if epoch % 10 == 0:
+                    checkpoint_path = os.path.join(args.save_dir, f"epoch_{epoch}.pth")
+                    save_checkpoint(model, optimizer, scheduler, epoch, checkpoint_path)
 
-                # Log model checkpoint path
-                mlflow.log_artifact(ckeckpoint_path)
+                    # Log model checkpoint path
+                    mlflow.log_artifact(checkpoint_path)
+                else:
+                    val_loss = float("nan")
 
-         # Log final model
-        mlflow.pytorch.log_model(model, artifact_path="model")
-        mlflow.end_run()
-        writer.close()
+            # Log final model
+            mlflow.pytorch.log_model(model, artifact_path="model")
+            mlflow.end_run()
+        finally:
+            writer.close()
 
         print("Training completed.")
 

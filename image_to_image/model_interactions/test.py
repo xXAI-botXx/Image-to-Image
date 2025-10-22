@@ -27,18 +27,23 @@ def test(args=None):
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size)
 
     # Model Loading
-    model = ResFCN(in_channels=1, hidden_channels=128, out_channels=1, num_blocks=16).to(device)
+    model = ResFCN(in_channels=args.resfcn_in_channels, hidden_channels=args.resfcn_hidden_channels, out_channels=args.resfcn_out_channels, num_blocks=args.resfcn_num_blocks).to(device)
 
     # Load weights from checkpoint
-    checkpoint = torch.load(args.checkpoint, map_location=device)
+    checkpoint = torch.load(args.model_params_path, map_location=device)
     model.load_state_dict(checkpoint["model_state"])
 
     # Criterion for evaluation
-    criterion = nn.CrossEntropyLoss()
+    if args.loss == "l1":
+        criterion = nn.L1Loss()
+    elif args.loss == "crossentropy":
+        criterion = nn.CrossEntropyLoss()
+    else:
+        raise ValueError(f"'{args.loss}' is not a supported loss.")
 
     # Run evaluation
-    test_loss, test_acc = evaluate(model, test_loader, criterion, device)
-    print(f"Test Loss: {test_loss:.4f} | Test Accuracy: {test_acc:.4f}")
+    test_loss = evaluate(model, test_loader, criterion, device)
+    print(f"Test Loss: {test_loss:.4f}")
 
 
 
