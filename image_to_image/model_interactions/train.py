@@ -134,7 +134,8 @@ def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, amp
     model.train()
 
     total_loss = 0.0
-    for x, y in tqdm(loader, desc=f"Epoch {epoch:03}", leave=True, ascii=True, dynamic_ncols=True, mininterval=5):
+    # for x, y in tqdm(loader, desc=f"Epoch {epoch:03}", leave=True, ascii=True mininterval=5):
+    for x, y in loader:
 
         if not isinstance(model, ResidualDesignModel):
             x, y = x.to(device), y.to(device)
@@ -175,13 +176,18 @@ def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, amp
 
 
 @torch.no_grad()
-def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_path=None, cmap="gray"):
+def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_path=None, cmap="gray", use_tqdm=True):
     model.eval()
 
     total_loss = 0.0
     is_first_round = True
 
-    for x, y in tqdm(loader, desc="Validation", leaves=True, ascii=True, dynamic_ncols=True, mininterval=3):
+    if use_tqdm:
+        validation_iter = tqdm(loader, desc="Validation", ascii=True, mininterval=3)
+    else:
+        validation_iter = loader
+
+    for x, y in validation_iter:
         x, y = x.to(device), y.to(device)
         y_predict = model(x)
         total_loss += criterion(y_predict, y).item()
@@ -208,6 +214,7 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
                 writer.add_image("GroundTruth", img_grid_gt, epoch)
 
             if save_path:
+                os.makedirs(save_path, exist_ok=True)
                 plt.imsave(os.path.join(save_path, f"{epoch}_prediction.png"), 
                         y_predict[0].detach().cpu().numpy().squeeze(), cmap=cmap)
                 plt.imsave(os.path.join(save_path, f"{epoch}_input.png"), 
@@ -223,12 +230,22 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
 
 # checkpoint helper
 def save_checkpoint(model, optimizer, scheduler, epoch, path='ckpt.pth'):
-    torch.save({
-        'epoch': epoch,
-        'model_state': model.state_dict(),
-        'optim_state': optimizer.state_dict(),
-        'sched_state': scheduler.state_dict() if scheduler else None
-    }, path)
+    checkpoint_saving = {'epoch': epoch, 'model_state': model.state_dict()}
+
+    if isinstance(optimizer, (list, tuple)):
+        for idx, cur_optimizer in enumerate(optimizer):
+            checkpoint_saving[f'optim_state_{idx}'] = cur_optimizer.state_dict()
+    else:
+        checkpoint_saving[f'optim_state'] = optimizer.state_dict()
+
+    if isinstance(scheduler, (list, tuple)):
+        for idx, cur_scheduler in enumerate(scheduler):
+            checkpoint_saving[f'sched_state_{idx}'] = cur_scheduler.state_dict()
+    else:
+        checkpoint_saving[f'sched_state'] = scheduler.state_dict()
+
+    # save checkpoint
+    torch.save(checkpoint_saving, path)
 
 
 
@@ -238,7 +255,7 @@ def save_checkpoint(model, optimizer, scheduler, epoch, path='ckpt.pth'):
 def train(args=None):
     print("\n---> Welcome to Image-to-Image Training <---")
 
-    print("\nChecking your Hardware:\n")
+    print("\nChecking your Hardware:")
     print(prime.get_hardware())
 
     # Parse arguments
@@ -435,17 +452,20 @@ def train(args=None):
         # Run Training
         last_best_loss = float("inf")
         try:
-            for epoch in tqdm(range(1, args.epochs + 1), desc="Epochs", leave=True, ascii=True, dynamic_ncols=True):
+            epoch_iter = tqdm(range(1, args.epochs + 1), desc="Epochs", ascii=True)
+            for epoch in epoch_iter:
                 start_time = time.time()
                 train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, epoch, amp_scaler, gradient_clipping_threshold)
                 duration = time.time() - start_time
-                if epoch % 10 == 0:
-                    val_loss = evaluate(model, val_loader, criterion, device, writer=writer, epoch=epoch, save_path=args.save_path, cmap=args.cmap)
+                if epoch % args.validation_interval == 0:
+                    val_loss = evaluate(model, val_loader, criterion, device, writer=writer, epoch=epoch, save_path=args.save_path, cmap=args.cmap, use_tqdm=False)
                 else:
                     val_loss = float("inf")
 
-                val_str = f"{val_loss:.4f}" if epoch % 10 == 0 else "N/A"
-                tqdm.write(f"[Epoch {epoch:02}/{args.epochs}] Train Loss: {train_loss:.4f} | Val Loss: {val_str} | Time: {duration:.2f}")
+                val_str = f"{val_loss:.4f}" if epoch % args.validation_interval == 0 else "N/A"
+                epoch_iter.set_postfix(train_loss=f"{train_loss:.4f}", val_loss=val_str, time_needed=f"{duration:.2f}s")
+                # tqdm.write(f" -> Train Loss: {train_loss:.4f} | Val Loss: {val_str} | Time: {duration:.2f}")
+                # \n\n[Epoch {epoch:02}/{args.epochs}]
                 
                 # Hint: Tensorboard and mlflow does not like spaces in tags!
 
@@ -520,7 +540,7 @@ def train(args=None):
 
                         # Log model checkpoint path
                         mlflow.log_artifact(checkpoint_path)
-                elif epoch % 10 == 0:
+                elif epoch % args.checkpoint_interval == 0:
                     checkpoint_path = os.path.join(checkpoint_save_dir, f"epoch_{epoch}.pth")
                     save_checkpoint(model, optimizer, scheduler, epoch, checkpoint_path)
 

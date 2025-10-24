@@ -19,6 +19,8 @@ def get_arg_parser():
     # Trainingsparameter
     parser.add_argument('--checkpoint_save_dir', type=str, default='./checkpoints', help='Path to save the model checkpoints. Is builded: checkpoint_save_dir/experiment_name/run_name')
     parser.add_argument('--save_only_best_model', action='store_true', help='Should every checkpoint be saved or only the best model?')
+    parser.add_argument('--checkpoint_interval', type=int, default=5, help='Every x epochs checkpoint will be saved (if not `save_only_best_model` is active).')
+    parser.add_argument('--validation_interval', type=int, default=5, help='Every x epochs validation will be calculated.')
     parser.add_argument('--epochs', type=int, default=50, help='Amount of whole data loops.')
     parser.add_argument('--batch_size', type=int, default=8, help='Size of a batch, data is processed in batches (smaller packages) and the GPU processes then one batch at a time.')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learnrate of adjusting the weights towards the gradients.')

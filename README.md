@@ -79,6 +79,7 @@ Use your CUDA needed. You may want to check with `nvidia-smi`.
     --amp_scaler grad \
     --checkpoint_save_dir ./checkpoints \
     --save_only_best_model \
+    --validation_interval 5 \
     --model resfcn \
     --resfcn_in_channels 1 \
     --resfcn_hidden_channels 64 \
@@ -113,6 +114,7 @@ Use your CUDA needed. You may want to check with `nvidia-smi`.
     --amp_scaler grad `
     --checkpoint_save_dir ./checkpoints `
     --save_only_best_model `
+    --validation_interval 5 ^
     --model resfcn `
     --resfcn_in_channels 1 `
     --resfcn_hidden_channels 64 `
@@ -175,6 +177,7 @@ python ./main.py \
   --amp_scaler grad \
   --checkpoint_save_dir ./checkpoints \
   --save_only_best_model \
+  --validation_interval 5 \
   --model resfcn \
   --resfcn_in_channels 1 \
   --resfcn_hidden_channels 64 \
@@ -282,6 +285,7 @@ nohup python ./main.py \
   --amp_scaler grad \
   --checkpoint_save_dir ./checkpoints \
   --save_only_best_model \
+  --validation_interval 5 \
   --model pix2pix \
   --pix2pix_in_channels 1 \
   --pix2pix_hidden_channels 64 \
@@ -328,6 +332,7 @@ start /B python ./main.py ^
   --amp_scaler grad ^
   --checkpoint_save_dir ./checkpoints ^
   --save_only_best_model ^
+  --validation_interval 5 ^
   --model pix2pix ^
   --pix2pix_in_channels 1 ^
   --pix2pix_hidden_channels 64 ^
@@ -344,8 +349,6 @@ start /B python ./main.py ^
   --cmap gray ^
   > ./logs/pix2pix_rebuild_test.log 2>&1
 ```
-As one liner:
-`start /B python ./main.py --mode train --epochs 100 --batch_size 16 --lr 0.0001 --loss weighted_combined --wc_loss_silog_lambda 0.5 --wc_loss_weight_silog 1.0 --wc_loss_weight_grad 50.0 --wc_loss_weight_ssim 100.0 --wc_loss_weight_edge_aware 50.0 --wc_loss_weight_l1 10.0 --wc_loss_weight_var 0.0 --wc_loss_weight_range 0.0 --wc_loss_weight_blur 0.0 --optimizer adam --weight_decay --weight_decay_rate 0.0004 --gradient_clipping --gradient_clipping_threshold 0.5 --scheduler step --activate_amp --amp_scaler grad --checkpoint_save_dir ./checkpoints --save_only_best_model --model pix2pix --pix2pix_in_channels 1 --pix2pix_hidden_channels 64 --pix2pix_out_channels 1 --pix2pix_second_loss_lambda 100 --data_variation sound_reflection --input_type osm --output_type standard --device cuda --experiment_name image-to-image --run_name pix2pix_rebuild_test --tensorboard_path ./tensorboard --save_path ./mlflow_images --cmap gray > ./logs/pix2pix_rebuild_test.log 2>&1`
 
 <br><br>
 
@@ -378,6 +381,7 @@ nohub python ./main.py \
   --amp_scaler grad \
   --checkpoint_save_dir ./checkpoints \
   --save_only_best_model \
+  --validation_interval 5 \
   --model resfcn \
   --resfcn_in_channels 1 \
   --resfcn_hidden_channels 64 \
@@ -422,6 +426,7 @@ start /B python ./main.py ^
   --amp_scaler grad ^
   --checkpoint_save_dir ./checkpoints ^
   --save_only_best_model ^
+  --validation_interval 5 ^
   --model resfcn ^
   --resfcn_in_channels 1 ^
   --resfcn_hidden_channels 64 ^
@@ -470,6 +475,7 @@ nohup python ./main.py \
   --amp_scaler grad \
   --checkpoint_save_dir ./checkpoints \
   --save_only_best_model \
+  --validation_interval 5 \
   --model residual_design_model \
   --base_model pix2pix \
   --complex_model resfcn \
@@ -528,6 +534,7 @@ start /B python ./main.py ^
   --amp_scaler grad ^
   --checkpoint_save_dir ./checkpoints ^
   --save_only_best_model ^
+  --validation_interval 5 ^
   --model residual_design_model ^
   --base_model pix2pix ^
   --complex_model resfcn ^
