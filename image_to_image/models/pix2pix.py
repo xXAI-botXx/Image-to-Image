@@ -63,7 +63,8 @@ class UNetGenerator(nn.Module):
         self.up8 = nn.Sequential(
             nn.ConvTranspose2d(hidden_channels*2, output_channels, 4, 2, 1),
             # nn.Tanh()
-            MMC(min=0.0, max=1.0)
+            ## MMC(min=0.0, max=1.0)
+            nn.Sigmoid()
         )
 
     def forward(self, x):
@@ -137,10 +138,10 @@ class Pix2Pix(nn.Module):
         self.second_loss = second_loss
         self.lambda_second = lambda_second
 
-        self.last_generator_loss = float("nan")
-        self.last_generator_adversarial_loss = float("nan")
-        self.last_generator_second_loss = float("nan")
-        self.last_discriminator_loss = float("nan")
+        self.last_generator_loss = float("inf")
+        self.last_generator_adversarial_loss = float("inf")
+        self.last_generator_second_loss = float("inf")
+        self.last_discriminator_loss = float("inf")
 
     def get_dict(self):
         return {

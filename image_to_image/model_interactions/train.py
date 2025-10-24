@@ -3,6 +3,7 @@
 # ---------------------------
 import sys
 import os
+import shutil
 import time
 import copy
 
@@ -98,8 +99,8 @@ def get_loss(loss_name, args):
 
 def backward_model(model, x, y, optimizer, criterion, device, epoch, amp_scaler, gradient_clipping_threshold=None):
     if isinstance(model, Pix2Pix):
-        if epoch is None or epoch % 2 == 0:
-            model.discriminator_step(x, y, optimizer[1], amp_scaler, device, gradient_clipping_threshold)
+        # if epoch is None or epoch % 2 == 0:
+        model.discriminator_step(x, y, optimizer[1], amp_scaler, device, gradient_clipping_threshold)
         loss, _, _ = model.generator_step(x, y, optimizer[0], amp_scaler, device, gradient_clipping_threshold)
     elif amp_scaler:
         # reset gradients 
@@ -335,9 +336,13 @@ def train(args=None):
     # setup checkpoint saving
     checkpoint_save_dir = os.path.join(args.checkpoint_save_dir, args.experiment_name, args.run_name)
     os.makedirs(checkpoint_save_dir, exist_ok=True)
+    shutil.rmtree(checkpoint_save_dir)
+    os.makedirs(checkpoint_save_dir, exist_ok=True)
 
     # setup intermediate image saving
     save_path = os.path.join(args.save_path, args.experiment_name, args.run_name)
+    os.makedirs(save_path, exist_ok=True)
+    shutil.rmtree(save_path)
     os.makedirs(save_path, exist_ok=True)
 
     # setup gradient clipping
@@ -451,7 +456,10 @@ def train(args=None):
         })
 
         # TensorBoard writer
-        writer = SummaryWriter(log_dir=args.tensorboard_path)
+        tensorboard_path = os.path.join(args.tensorboard_path, args.experiment_name, args.run_name)
+        os.makedirs(tensorboard_path, exist_ok=True)
+        shutil.rmtree(tensorboard_path)
+        writer = SummaryWriter(log_dir=tensorboard_path)
 
         # Run Training
         last_best_loss = float("inf")

@@ -69,7 +69,7 @@ def get_arg_parser():
     parser.add_argument('--pix2pix_in_channels', type=int, default=1, help='How much channels as input?')
     parser.add_argument('--pix2pix_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
     parser.add_argument('--pix2pix_out_channels', type=int, default=1, help='How much channels as output?')
-    parser.add_argument('--pix2pix_second_loss_lambda', type=int, default=100, help='Weighting of second loss.')
+    parser.add_argument('--pix2pix_second_loss_lambda', type=float, default=100.0, help='Weighting of second loss.')
 
     # ---> Residual Design Model
     parser.add_argument('--base_model', type=str, default="pix2pix", choices=['resfcn', 'pix2pix'],
@@ -102,7 +102,7 @@ def get_arg_parser():
     parser.add_argument('--pix2pix_2_in_channels', type=int, default=1, help='How much channels as input?')
     parser.add_argument('--pix2pix_2_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
     parser.add_argument('--pix2pix_2_out_channels', type=int, default=1, help='How much channels as output?')
-    parser.add_argument('--pix2pix_2_second_loss_lambda', type=int, default=100, help='Weighting of second loss.')
+    parser.add_argument('--pix2pix_2_second_loss_lambda', type=float, default=100.0, help='Weighting of second loss.')
 
     # Data
     parser.add_argument('--data_variation', type=str, default='sound_baseline', choices=['sound_baseline', 'sound_reflection', 'sound_diffraction', 'sound_combined'],

@@ -350,6 +350,52 @@ start /B python ./main.py ^
   > ./logs/pix2pix_rebuild_test.log 2>&1
 ```
 
+```bash
+start /B python ./main.py ^
+  --mode train ^
+  --epochs 100 ^
+  --batch_size 16 ^
+  --lr 0.001 ^
+  --loss weighted_combined ^
+  --wc_loss_silog_lambda 0.5 ^
+  --wc_loss_weight_silog 0.1 ^
+  --wc_loss_weight_grad 5.0 ^
+  --wc_loss_weight_ssim 1.0 ^
+  --wc_loss_weight_edge_aware 5.0 ^
+  --wc_loss_weight_l1 1.0 ^
+  --wc_loss_weight_var 0.0 ^
+  --wc_loss_weight_range 0.0 ^
+  --wc_loss_weight_blur 0.0 ^
+  --optimizer adam ^
+  --weight_decay ^
+  --weight_decay_rate 0.00004 ^
+  --gradient_clipping ^
+  --gradient_clipping_threshold 2.0 ^
+  --scheduler step ^
+  --activate_amp ^
+  --amp_scaler grad ^
+  --checkpoint_save_dir ./checkpoints ^
+  --save_only_best_model ^
+  --validation_interval 1 ^
+  --model pix2pix ^
+  --pix2pix_in_channels 1 ^
+  --pix2pix_hidden_channels 64 ^
+  --pix2pix_out_channels 1 ^
+  --pix2pix_second_loss_lambda 10.0 ^
+  --data_variation sound_reflection ^
+  --input_type osm ^
+  --output_type standard ^
+  --device cuda ^
+  --experiment_name image-to-image ^
+  --run_name pix2pix_rebuild_test ^
+  --tensorboard_path ./tensorboard ^
+  --save_path ./mlflow_images ^
+  --cmap gray ^
+  > ./logs/pix2pix_rebuild_test.log 2>&1
+```
+
+
+
 <br><br>
 
 **New Simple Model try out**
