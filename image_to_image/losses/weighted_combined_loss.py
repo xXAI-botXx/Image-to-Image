@@ -177,7 +177,7 @@ class WeightedCombinedLoss(nn.Module):
             else:
                 # no mask/weight-map
                 # FIXME -> right
-                weight_map = torch.ones(pred)
+                weight_map = torch.ones_like(pred)
 
         loss_silog = self.silog_loss(pred, target, weight_map)
         loss_grad = self.gradient_l1_loss(pred, target, weight_map)

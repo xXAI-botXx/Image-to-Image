@@ -1,14 +1,16 @@
 # ---------------------------
 #        > Imports <
 # ---------------------------
-# import sys
-# import os
+import sys
+sys.path += ["."]
 
-# # Ensure relative imports work correctly when run directly
-# if __package__ is None or __package__ == '':
-#     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import warnings
+# warnings.filterwarnings("ignore", category=UserWarning, module="pygame.pkgdata")
+warnings.filterwarnings("ignore", category=UserWarning)
 
-from .utils.argument_parsing import parse_args
+import image_to_image as iti
+from image_to_image.utils import parse_args
+from image_to_image.model_interactions import train, inference, test
 
 
 
@@ -22,13 +24,10 @@ def main():
     print(f"Using device: {args.device}")
 
     if args.mode == 'train':
-        from .model_interactions.train import train
         train(args)
     elif args.mode == 'test':
-        from .model_interactions.test import test
         test(args)
     elif args.mode == 'inference':
-        from model_interactions.inference import inference
         inference(args)
     else:
         raise ValueError(f"Unknown mode: {args.mode}")

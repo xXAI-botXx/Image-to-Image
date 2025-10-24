@@ -4,6 +4,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.amp import autocast
 
 
 
@@ -152,26 +153,43 @@ class Pix2Pix(nn.Module):
     def forward(self, x):
         return self.generator(x)
 
-    def generator_step(self, x, y, optimizer, scaler):
-        # make predictions
-        fake_y = self.generator(x)
+    def generator_step(self, x, y, optimizer, amp_scaler, device, gradient_clipping_threshold):
+        if amp_scaler:
+            with autocast(device_type=device.type):
+                # make predictions
+                fake_y = self.generator(x)
 
-        discriminator_fake = self.discriminator(x, fake_y)
+                discriminator_fake = self.discriminator(x, fake_y)
 
-        # calc loss -> discriminator thinks it is real?
-        loss_adversarial = self.adversarial_loss(discriminator_fake, torch.ones_like(discriminator_fake))
-        loss_second = self.second_loss(fake_y, y) * self.lambda_second
-        loss_total = loss_adversarial + loss_second
+                # calc loss -> discriminator thinks it is real?
+                loss_adversarial = self.adversarial_loss(discriminator_fake, torch.ones_like(discriminator_fake))
+                loss_second = self.second_loss(fake_y, y) * self.lambda_second
+                loss_total = loss_adversarial + loss_second
 
-        # backward pass -> calc gradients and change the weights towards the opposite of gradients via optimizer
-        if scaler:
+            # backward pass -> calc gradients and change the weights towards the opposite of gradients via optimizer
+    
             optimizer.zero_grad(set_to_none=True)
-            scaler.scale(loss_total).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            amp_scaler.scale(loss_total).backward()
+            if gradient_clipping_threshold:
+                # Unscale first!
+                amp_scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(self.generator.parameters(), max_norm=gradient_clipping_threshold)
+            amp_scaler.step(optimizer)
+            amp_scaler.update()
         else:
+            # make predictions
+            fake_y = self.generator(x)
+
+            discriminator_fake = self.discriminator(x, fake_y)
+
+            # calc loss -> discriminator thinks it is real?
+            loss_adversarial = self.adversarial_loss(discriminator_fake, torch.ones_like(discriminator_fake))
+            loss_second = self.second_loss(fake_y, y) * self.lambda_second
+            loss_total = loss_adversarial + loss_second
             optimizer.zero_grad()
             loss_total.backward()
+            if gradient_clipping_threshold:
+                torch.nn.utils.clip_grad_norm_(self.generator.parameters(), max_norm=gradient_clipping_threshold)
             optimizer.step()
 
         self.last_generator_loss = loss_total.item()
@@ -180,27 +198,44 @@ class Pix2Pix(nn.Module):
 
         return loss_total, loss_adversarial, loss_second
 
-    def discriminator_step(self, x, y, optimizer, scaler):
-        # make predictions
-        fake_y = self.generator(x).detach()
+    def discriminator_step(self, x, y, optimizer, amp_scaler, device, gradient_clipping_threshold):
+        if amp_scaler:
+            with autocast(device_type=device.type): 
+                # make predictions
+                fake_y = self.generator(x).detach()  # don't update generator!!
 
-        discriminator_real = self.discriminator(x, y)
-        discriminator_fake = self.discriminator(x, fake_y)
+                discriminator_real = self.discriminator(x, y)
+                discriminator_fake = self.discriminator(x, fake_y)
 
-        # calc loss -> 1: predictions = real, 0: predictions = fake
-        loss_real = self.adversarial_loss(discriminator_real, torch.ones_like(discriminator_real))  # torch.full_like(discriminator_real, 0.9)
-        loss_fake = self.adversarial_loss(discriminator_fake, torch.zeros_like(discriminator_fake))
-        loss_total = (loss_real + loss_fake) * 0.5
+                # calc loss -> 1: predictions = real, 0: predictions = fake
+                loss_real = self.adversarial_loss(discriminator_real, torch.ones_like(discriminator_real))  # torch.full_like(discriminator_real, 0.9)
+                loss_fake = self.adversarial_loss(discriminator_fake, torch.zeros_like(discriminator_fake))
+                loss_total = (loss_real + loss_fake) * 0.5
 
-        # backward pass -> calc gradients and change the weights towards the opposite of gradients via optimizer
-        if scaler:
+            # backward pass -> calc gradients and change the weights towards the opposite of gradients via optimizer
             optimizer.zero_grad(set_to_none=True)
-            scaler.scale(loss_total).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            amp_scaler.scale(loss_total).backward()
+            if gradient_clipping_threshold:
+                # Unscale first!
+                amp_scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(self.discriminator.parameters(), max_norm=gradient_clipping_threshold)
+            amp_scaler.step(optimizer)
+            amp_scaler.update()
         else:
+            # make predictions
+            fake_y = self.generator(x).detach()
+
+            discriminator_real = self.discriminator(x, y)
+            discriminator_fake = self.discriminator(x, fake_y)
+
+            # calc loss -> 1: predictions = real, 0: predictions = fake
+            loss_real = self.adversarial_loss(discriminator_real, torch.ones_like(discriminator_real))  # torch.full_like(discriminator_real, 0.9)
+            loss_fake = self.adversarial_loss(discriminator_fake, torch.zeros_like(discriminator_fake))
+            loss_total = (loss_real + loss_fake) * 0.5
             optimizer.zero_grad()
             loss_total.backward()
+            if gradient_clipping_threshold:
+                torch.nn.utils.clip_grad_norm_(self.discriminator.parameters(), max_norm=gradient_clipping_threshold)
             optimizer.step()
 
         self.last_discriminator_loss = loss_total.item()

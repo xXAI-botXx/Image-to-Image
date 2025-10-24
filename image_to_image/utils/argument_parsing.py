@@ -10,74 +10,15 @@ import textwrap
 #     > Argument Parser <
 # ---------------------------
 def get_arg_parser():
-    parser = argparse.ArgumentParser(
-        description="Image-to-Image Framework - train and inferencing",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=textwrap.dedent("""
-        Example commands:
-
-        Training:
-          python -m main \\
-            --mode train \\
-            --epochs 100 \\
-            --batch_size 16 \\
-            --lr 0.0001 \\
-            --loss l1 \\
-            --optimizer adam \\
-            --scheduler step \\
-            --scaler grad \\
-            --save_dir ./checkpoints \\
-            --model resfcn \\
-            --resfcn_in_channels 1 \\
-            --resfcn_hidden_channels 64 \\
-            --resfcn_out_channels 1 \\
-            --resfcn_num_blocks 16 \\
-            --data_variation sound_reflection \\
-            --input_type osm \\
-            --output_type standard \\
-            --device cuda \\
-            --experiment_name image-to-image \\
-            --run_name resfcn_test \\
-            --tensorboard_path ./tensorboard \\
-            --save_path ./mlflow_images \\
-            --cmap gray
-
-        Testing:
-          python -m main \\
-            --mode test \\
-            --batch_size 16 \\
-            --loss l1 \\
-            --model resfcn \\
-            --model_params_path ./checkpoints/my_model.pth \\
-            --resfcn_in_channels 1 \\
-            --resfcn_hidden_channels 64 \\
-            --resfcn_out_channels 1 \\
-            --resfcn_num_blocks 16 \\
-            --data_variation sound_reflection \\
-            --input_type osm \\
-            --output_type standard \\
-            --device cuda
-
-        Inference:
-          python -m main \\
-            --mode inference \\
-            --batch_size 16 \\
-            --model resfcn \\
-            --model_params_path ./checkpoints/my_model.pth \\
-            --resfcn_in_channels 1 \\
-            --resfcn_hidden_channels 64 \\
-            --resfcn_out_channels 1 \\
-            --resfcn_num_blocks 16 \\
-            --input_dir_path ./data/dataset \\
-            --device cuda
-        """)
-        )
+    parser = argparse.ArgumentParser(description="Image-to-Image Framework - train and inferencing")
 
     # General Parameter
     parser.add_argument('--mode', type=str, default='train', choices=['train', 'test', 'inference'],
                         help='Modus: train, test or inference')
 
     # Trainingsparameter
+    parser.add_argument('--checkpoint_save_dir', type=str, default='./checkpoints', help='Path to save the model checkpoints. Is builded: checkpoint_save_dir/experiment_name/run_name')
+    parser.add_argument('--save_only_best_model', action='store_true', help='Should every checkpoint be saved or only the best model?')
     parser.add_argument('--epochs', type=int, default=50, help='Amount of whole data loops.')
     parser.add_argument('--batch_size', type=int, default=8, help='Size of a batch, data is processed in batches (smaller packages) and the GPU processes then one batch at a time.')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learnrate of adjusting the weights towards the gradients.')
@@ -96,13 +37,16 @@ def get_arg_parser():
 
     parser.add_argument('--optimizer', type=str, default="adam", choices=['adam'],
                         help='Optimizer, which decides how exactly to calculate the loss and weight gradients.')
+    parser.add_argument('--weight_decay', action="store_true", help='Whether or not to use weight decay (keeping weights smaller).')
+    parser.add_argument('--weight_decay_rate', type=float, default=0.0005, help='Coefficient of weight decay -> weighting of the penalty.')
+    parser.add_argument('--gradient_clipping', action="store_true", help='Whether or not to use gradient clipping.')
+    parser.add_argument('--gradient_clipping_threshold', type=float, default=0.5, help='Coefficient of gradient clipping -> threshold for clipping.')
     parser.add_argument('--scheduler', type=str, default="step", choices=['step'],
                         help='Decides how to update the learnrate dynamically.')
     # extra arguments for scheduler? (for parameters)
-    parser.add_argument('--scaler', type=str, default=None, choices=[None, 'grad'],
-                        help='Scaling of loss.')
-    
-    parser.add_argument('--save_dir', type=str, default='./checkpoints', help='Path to save the model checkpoints.')
+    parser.add_argument('--activate_amp', action="store_true", help='Activates (Automatically) Mixed Precision and use scaler to loose no details because of the smaller float.')
+    parser.add_argument('--amp_scaler', type=str, default=None, choices=[None, 'grad'],
+                        help='Decides whichscaler should be used-')
 
     # Inference
     parser.add_argument('--model_params_path', type=str, required=False, help='Path to the model checkpoints.')
@@ -159,9 +103,6 @@ def get_arg_parser():
     parser.add_argument('--pix2pix_2_second_loss_lambda', type=int, default=100, help='Weighting of second loss.')
 
     # Data
-    # parser.add_argument('--data_mode', type=str, default='train',
-    #                     choices=['train', 'test', 'eval'],
-    #                     help='Which data version should be loaded')
     parser.add_argument('--data_variation', type=str, default='sound_baseline', choices=['sound_baseline', 'sound_reflection', 'sound_diffraction', 'sound_combined'],
                         help='Name of the dataset variation.')
     parser.add_argument('--input_type', type=str, default='osm', choices=['osm', 'base_simulation'],

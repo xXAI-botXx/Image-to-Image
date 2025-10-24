@@ -1,6 +1,7 @@
 # ---------------------------
 #        > Imports <
 # ---------------------------
+import sys
 import os
 import time
 import copy
@@ -12,13 +13,15 @@ from tqdm import tqdm
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 import torchvision
 
 # Experiment tracking
 import mlflow
 import mlflow.pytorch
 from torch.utils.tensorboard import SummaryWriter
+
+import prime_printer as prime
 
 
 from ..utils.argument_parsing import parse_args
@@ -42,9 +45,9 @@ def get_model(model_name, args, criterion, device):
     elif model_name == "resfcn_2":
         model = ResFCN(in_channels=args.resfcn_2_in_channels, hidden_channels=args.resfcn_2_hidden_channels, out_channels=args.resfcn_2_out_channels, num_blocks=args.resfcn_2_num_blocks).to(device)
     elif model_name == "pix2pix":
-        model = Pix2Pix(input_channels=args.pix2pix_in_channels, output_channels=args.pix2pix_out_channels, hidden_channels=args.pix2pix_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_second_loss_lambda)
+        model = Pix2Pix(input_channels=args.pix2pix_in_channels, output_channels=args.pix2pix_out_channels, hidden_channels=args.pix2pix_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_second_loss_lambda).to(device)
     elif model_name == "pix2pix_2":
-        model = Pix2Pix(input_channels=args.pix2pix_2_in_channels, output_channels=args.pix2pix_2_out_channels, hidden_channels=args.pix2pix_2_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_2_second_loss_lambda)
+        model = Pix2Pix(input_channels=args.pix2pix_2_in_channels, output_channels=args.pix2pix_2_out_channels, hidden_channels=args.pix2pix_2_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_2_second_loss_lambda).to(device)
     else:
         raise ValueError(f"'{model_name}' is not an supported model.")
 
@@ -93,21 +96,25 @@ def get_loss(loss_name, args):
 
 
 
-def backward_model(model, x, y, optimizer, criterion, epoch, scaler):
+def backward_model(model, x, y, optimizer, criterion, device, epoch, amp_scaler, gradient_clipping_threshold=None):
     if isinstance(model, Pix2Pix):
         if epoch is None or epoch % 2 == 0:
-            model.discriminator_step(x, y, optimizer[1], scaler)
-        loss, _, _ = model.generator_step(x, y, optimizer[0], scaler)
-    elif scaler:
+            model.discriminator_step(x, y, optimizer[1], amp_scaler, device, gradient_clipping_threshold)
+        loss, _, _ = model.generator_step(x, y, optimizer[0], amp_scaler, device, gradient_clipping_threshold)
+    elif amp_scaler:
         # reset gradients 
         optimizer.zero_grad()
 
-        with autocast():
+        with autocast(device_type=device.type):
             y_predict = model(x)
             loss = criterion(y_predict, y)
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        amp_scaler.scale(loss).backward()
+        if gradient_clipping_threshold:
+            # Unscale first!
+            amp_scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_clipping_threshold)
+        amp_scaler.step(optimizer)
+        amp_scaler.update()
     else:
         # reset gradients 
         optimizer.zero_grad()
@@ -115,17 +122,19 @@ def backward_model(model, x, y, optimizer, criterion, epoch, scaler):
         y_predict = model(x)
         loss = criterion(y_predict, y)
         loss.backward()
+        if gradient_clipping_threshold:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_clipping_threshold)
         optimizer.step()
     return loss
 
 
 
-def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, scaler=None):
+def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, amp_scaler=None, gradient_clipping_threshold=None):
     # change to train mode -> calc gradients
     model.train()
 
     total_loss = 0.0
-    for x, y in tqdm(loader, desc="Training", leave=False):
+    for x, y in tqdm(loader, desc=f"Epoch {epoch:03}", leave=True, ascii=True, dynamic_ncols=True, mininterval=5):
 
         if not isinstance(model, ResidualDesignModel):
             x, y = x.to(device), y.to(device)
@@ -137,14 +146,14 @@ def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, sca
             # Basline
             base_input = base_input.to(device)
             base_target = base_target.to(device)
-            base_loss = backward_model(model=model.base_model, x=base_input, y=base_target, optimizer=optimizer[0], criterion=criterion[0], epoch=epoch, scaler=scaler)
+            base_loss = backward_model(model=model.base_model, x=base_input, y=base_target, optimizer=optimizer[0], criterion=criterion[0], epoch=epoch, amp_scaler=amp_scaler)
             # del base_input
             # torch.cuda.empty_cache()
 
             # Complex
             complex_input = complex_input.to(device)
             complex_target = complex_target.to(device)
-            complex_loss = backward_model(model=model.complex_model, x=complex_input, y=complex_target, optimizer=optimizer[1], criterion=criterion[1], epoch=epoch, scaler=scaler)
+            complex_loss = backward_model(model=model.complex_model, x=complex_input, y=complex_target, optimizer=optimizer[1], criterion=criterion[1], epoch=epoch, amp_scaler=amp_scaler)
             # del complex_input
             # torch.cuda.empty_cache()
 
@@ -159,7 +168,7 @@ def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, sca
             model.last_combined_loss = combine_loss
             loss = base_loss + complex_loss + combine_loss
         else:
-            loss = backward_model(model=model, x=x, y=y, optimizer=optimizer, criterion=criterion, epoch=epoch, scaler=scaler)
+            loss = backward_model(model=model, x=x, y=y, optimizer=optimizer, criterion=criterion, device=device, epoch=epoch, amp_scaler=amp_scaler, gradient_clipping_threshold=gradient_clipping_threshold)
         total_loss += loss.item()
     return total_loss / len(loader)
 
@@ -172,7 +181,7 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
     total_loss = 0.0
     is_first_round = True
 
-    for x, y in tqdm(loader, desc="Evaluating", leave=False):
+    for x, y in tqdm(loader, desc="Validation", leaves=True, ascii=True, dynamic_ncols=True, mininterval=3):
         x, y = x.to(device), y.to(device)
         y_predict = model(x)
         total_loss += criterion(y_predict, y).item()
@@ -221,17 +230,16 @@ def save_checkpoint(model, optimizer, scheduler, epoch, path='ckpt.pth'):
         'sched_state': scheduler.state_dict() if scheduler else None
     }, path)
 
-# usage example in training script
-# for epoch in range(start, epochs):
-#     train_loss = train_one_epoch(..., scaler=scaler)
-#     val_loss, val_acc = evaluate(...)
-#     save_checkpoint(...)
+
 
 # ---------------------------
 #        > Train Main <
 # ---------------------------
 def train(args=None):
     print("\n---> Welcome to Image-to-Image Training <---")
+
+    print("\nChecking your Hardware:\n")
+    print(prime.get_hardware())
 
     # Parse arguments
     if args is None:
@@ -244,13 +252,13 @@ def train(args=None):
         train_dataset = PhysGenResidualDataset(variation=args.data_variation, mode="train", 
                                                fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
         
-        val_dataset = PhysGenDataset(variation=args.data_variation, mode="eval", input_type="osm", output_type="standard", 
+        val_dataset = PhysGenDataset(variation=args.data_variation, mode="validation", input_type="osm", output_type="standard", 
                                     fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
     else:
         train_dataset = PhysGenDataset(variation=args.data_variation, mode="train", input_type=args.input_type, output_type=args.output_type, 
                                     fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
         
-        val_dataset = PhysGenDataset(variation=args.data_variation, mode="eval", input_type=args.input_type, output_type=args.output_type, 
+        val_dataset = PhysGenDataset(variation=args.data_variation, mode="validation", input_type=args.input_type, output_type=args.output_type, 
                                     fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
@@ -274,15 +282,16 @@ def train(args=None):
         model = get_model(model_name=args.model, args=args, criterion=criterion, device=device)
 
     # Optimizer
+    weight_decay_rate = args.weight_decay_rate if args.weight_decay else 0
     if args.optimizer.lower() == "adam":
         if args.model.lower() == "pix2pix":
-            optimizer = [optim.Adam(model.generator.parameters(), lr=args.lr), 
-                         optim.Adam(model.discriminator.parameters(), lr=args.lr)]
-        if args.model.lower() == "residual_design_model":
-            optimizer = [optim.Adam(model.base_model.parameters(), lr=args.lr),
-                         optim.Adam(model.complex_model.parameters(), lr=args.lr)]
+            optimizer = [optim.Adam(model.generator.parameters(), lr=args.lr, weight_decay=weight_decay_rate), 
+                         optim.Adam(model.discriminator.parameters(), lr=args.lr, weight_decay=weight_decay_rate)]
+        elif args.model.lower() == "residual_design_model":
+            optimizer = [optim.Adam(model.base_model.parameters(), lr=args.lr, weight_decay=weight_decay_rate),
+                         optim.Adam(model.complex_model.parameters(), lr=args.lr, weight_decay=weight_decay_rate)]
         else:
-            optimizer = optim.Adam(model.parameters(), lr=args.lr)
+            optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=weight_decay_rate)
     else:
         raise ValueError(f"'{args.optimizer}' is not an supported optimizer.")
 
@@ -298,15 +307,23 @@ def train(args=None):
     else:
         raise ValueError(f"'{args.scheduler}' is not an supported scheduler.")
 
-    # Scaler
-    if args.scaler is None:
-        scaler = None
-    elif args.scaler.lower() == "grad":
-        scaler = GradScaler()
+    # AMP Scaler
+    if args.activate_amp == False:
+        amp_scaler = None
+    elif args.amp_scaler.lower() == "grad":
+        amp_scaler = GradScaler()
     else:
-        raise ValueError(f"'{args.scaler}' is not an supported scaler.")
+        raise ValueError(f"'{args.amp_scaler}' is not an supported scaler.")
 
-    os.makedirs(args.save_dir, exist_ok=True)
+    # setup checkpoint saving
+    checkpoint_save_dir = os.path.join(args.checkpoint_save_dir, args.experiment_name, args.run_name)
+    os.makedirs(checkpoint_save_dir, exist_ok=True)
+
+    # setup gradient clipping
+    if args.gradient_clipping:
+        gradient_clipping_threshold = args.gradient_clipping_threshold
+    else:
+        gradient_clipping_threshold = None
 
     mlflow.set_experiment(args.experiment_name)
     # same as:
@@ -329,8 +346,14 @@ def train(args=None):
             "learning_rate": args.lr,
             "loss_function": args.loss,
             "optimizer": args.optimizer,
+            "weight_decay": args.weight_decay,
+            "weight_decay_rate": args.weight_decay_rate,
+            "gradient_clipping": args.gradient_clipping,
+            "gradient_clipping_threshold": args.gradient_clipping_threshold,
             "scheduler": args.scheduler,
-            "scaler": args.scaler,
+            "use_amp": args.activate_amp,
+            "amp_scaler": args.amp_scaler,
+            "save_only_best_model": args.save_only_best_model,
 
             # Loss
             "wc_loss_silog_lambda": args.wc_loss_silog_lambda,
@@ -367,7 +390,7 @@ def train(args=None):
             "run_name": args.run_name,
             "tensorboard_path": args.tensorboard_path,
             "save_path": args.save_path,
-            "save_dir": args.save_dir,
+            "checkpoint_save_dir": checkpoint_save_dir,
             "cmap": args.cmap,
 
             # >> Residual Model <<
@@ -410,19 +433,19 @@ def train(args=None):
         writer = SummaryWriter(log_dir=args.tensorboard_path)
 
         # Run Training
+        last_best_loss = float("inf")
         try:
-            for epoch in range(1, args.epochs + 1):
+            for epoch in tqdm(range(1, args.epochs + 1), desc="Epochs", leave=True, ascii=True, dynamic_ncols=True):
                 start_time = time.time()
-                train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, epoch, scaler)
+                train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, epoch, amp_scaler, gradient_clipping_threshold)
                 duration = time.time() - start_time
                 if epoch % 10 == 0:
                     val_loss = evaluate(model, val_loader, criterion, device, writer=writer, epoch=epoch, save_path=args.save_path, cmap=args.cmap)
                 else:
-                    val_loss = float("nan")
+                    val_loss = float("inf")
 
                 val_str = f"{val_loss:.4f}" if epoch % 10 == 0 else "N/A"
-                print(f"[Epoch {epoch:02}/{args.epochs}] Train Loss: {train_loss:.4f} | "
-                      f"Val Loss: {val_str} | Time: {duration:.2f}")
+                tqdm.write(f"[Epoch {epoch:02}/{args.epochs}] Train Loss: {train_loss:.4f} | Val Loss: {val_str} | Time: {duration:.2f}")
                 
                 # Hint: Tensorboard and mlflow does not like spaces in tags!
 
@@ -437,11 +460,21 @@ def train(args=None):
                     writer.add_scalar("LR", scheduler.get_last_lr()[0], epoch)
 
                 # Log to MLflow
-                mlflow.log_metrics({
-                    "train_loss": train_loss,
-                    "val_loss": val_loss,
-                    "lr": scheduler.get_last_lr()[0]
-                }, step=epoch)
+                if type(scheduler) in [list, tuple]:
+                    metrics = {
+                        "train_loss": train_loss,
+                        "val_loss": val_loss,
+                    }
+                    idx = 0
+                    for idx, cur_scheduler in enumerate(scheduler):
+                        metrics[f"lr_{idx}"] = cur_scheduler.get_last_lr()[0]
+                    mlflow.log_metrics(metrics, step=epoch)
+                else:
+                    mlflow.log_metrics({
+                        "train_loss": train_loss,
+                        "val_loss": val_loss,
+                        "lr": scheduler.get_last_lr()[0]
+                    }, step=epoch)
 
                 # add sub losses / loss components
                 if args.model.lower() in ["pix2pix", "residual_design_model"]:
@@ -450,11 +483,26 @@ def train(args=None):
                         writer.add_scalar(f"LossComponents/{name}", value, epoch)
                     mlflow.log_metrics(losses, step=epoch)
 
-                if args.loss in ["weighted_combined"]:
-                    losses = criterion.get_dict()
-                    for name, value in losses.items():
-                        writer.add_scalar(f"LossComponents/{name}", value, epoch)
-                    mlflow.log_metrics(losses, step=epoch)
+                if type(criterion) in [list, tuple]:
+                    if args.loss in ["weighted_combined"]:
+                        losses = criterion[0].get_dict()
+                        for name, value in losses.items():
+                            writer.add_scalar(f"LossComponents/{name}", value, epoch)
+                        mlflow.log_metrics(losses, step=epoch)
+
+                    if args.loss_2 in ["weighted_combined"] and args.model.lower() in ["residual_design_model"]:
+                        losses = criterion[1].get_dict()
+                        for name, value in losses.items():
+                            writer.add_scalar(f"LossComponents/{name}", value, epoch)
+                        mlflow.log_metrics(losses, step=epoch)
+                else:
+                    if args.loss in ["weighted_combined"]:
+                        losses = criterion.get_dict()
+                        for name, value in losses.items():
+                            writer.add_scalar(f"LossComponents/{name}", value, epoch)
+                        mlflow.log_metrics(losses, step=epoch)
+
+                
 
                 # Step scheduler
                 if args.model.lower() in ["pix2pix"]:
@@ -464,14 +512,20 @@ def train(args=None):
                     scheduler.step()
 
                 # Save Checkpoint
-                if epoch % 10 == 0:
-                    checkpoint_path = os.path.join(args.save_dir, f"epoch_{epoch}.pth")
+                if args.save_only_best_model:
+                    if val_loss < last_best_loss:
+                        last_best_loss = val_loss
+                        checkpoint_path = os.path.join(checkpoint_save_dir, f"best_checkpoint.pth")
+                        save_checkpoint(model, optimizer, scheduler, epoch, checkpoint_path)
+
+                        # Log model checkpoint path
+                        mlflow.log_artifact(checkpoint_path)
+                elif epoch % 10 == 0:
+                    checkpoint_path = os.path.join(checkpoint_save_dir, f"epoch_{epoch}.pth")
                     save_checkpoint(model, optimizer, scheduler, epoch, checkpoint_path)
 
                     # Log model checkpoint path
                     mlflow.log_artifact(checkpoint_path)
-                else:
-                    val_loss = float("nan")
 
             # Log final model
             mlflow.pytorch.log_model(model, artifact_path="model")

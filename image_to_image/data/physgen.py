@@ -72,7 +72,7 @@ class PhysGenDataset(Dataset):
         - variation : str
             Chooses the used dataset variant: sound_baseline, sound_reflection, sound_diffraction, sound_combined.
         - mode : str
-            Can be "train", "test", "eval".
+            Can be "train", "test", "validation".
         - input_type : str
             Defines the used Input -> "osm", "base_simulation"
         - output_type : str
@@ -135,7 +135,7 @@ class PhysGenDataset(Dataset):
             target_img = target_img.unsqueeze(0)
             target_img *= -1
 
-        return input_img, target_img, idx
+        return input_img, target_img
 
 
 
