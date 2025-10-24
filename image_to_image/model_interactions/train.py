@@ -214,7 +214,7 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
                 writer.add_image("GroundTruth", img_grid_gt, epoch)
 
             if save_path:
-                os.makedirs(save_path, exist_ok=True)
+                # os.makedirs(save_path, exist_ok=True)
                 plt.imsave(os.path.join(save_path, f"{epoch}_prediction.png"), 
                         y_predict[0].detach().cpu().numpy().squeeze(), cmap=cmap)
                 plt.imsave(os.path.join(save_path, f"{epoch}_input.png"), 
@@ -335,6 +335,10 @@ def train(args=None):
     # setup checkpoint saving
     checkpoint_save_dir = os.path.join(args.checkpoint_save_dir, args.experiment_name, args.run_name)
     os.makedirs(checkpoint_save_dir, exist_ok=True)
+
+    # setup intermediate image saving
+    save_path = os.path.join(args.save_path, args.experiment_name, args.run_name)
+    os.makedirs(save_path, exist_ok=True)
 
     # setup gradient clipping
     if args.gradient_clipping:
@@ -458,7 +462,7 @@ def train(args=None):
                 train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, epoch, amp_scaler, gradient_clipping_threshold)
                 duration = time.time() - start_time
                 if epoch % args.validation_interval == 0:
-                    val_loss = evaluate(model, val_loader, criterion, device, writer=writer, epoch=epoch, save_path=args.save_path, cmap=args.cmap, use_tqdm=False)
+                    val_loss = evaluate(model, val_loader, criterion, device, writer=writer, epoch=epoch, save_path=save_path, cmap=args.cmap, use_tqdm=False)
                 else:
                     val_loss = float("inf")
 
