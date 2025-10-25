@@ -37,15 +37,21 @@ def get_arg_parser():
     parser.add_argument('--wc_loss_weight_range', type=float, default=1.0, help='Weight for range loss.')
     parser.add_argument('--wc_loss_weight_blur', type=float, default=1.0, help='Weight for blur loss.')
 
-    parser.add_argument('--optimizer', type=str, default="adam", choices=['adam'],
+    parser.add_argument('--optimizer', type=str, default="adam", choices=['adam', 'adamw'],
                         help='Optimizer, which decides how exactly to calculate the loss and weight gradients.')
+    parser.add_argument('--optimizer_2', type=str, default="adam", choices=['adam', 'adamw'],
+                        help='Optimizer, which decides how exactly to calculate the loss and weight gradients -> for the second model(-part).\nFor example for the discriminator part of pix2pix model or the complex part in the residual design model.')
     parser.add_argument('--weight_decay', action="store_true", help='Whether or not to use weight decay (keeping weights smaller).')
     parser.add_argument('--weight_decay_rate', type=float, default=0.0005, help='Coefficient of weight decay -> weighting of the penalty.')
     parser.add_argument('--gradient_clipping', action="store_true", help='Whether or not to use gradient clipping.')
     parser.add_argument('--gradient_clipping_threshold', type=float, default=0.5, help='Coefficient of gradient clipping -> threshold for clipping.')
-    parser.add_argument('--scheduler', type=str, default="step", choices=['step'],
+    parser.add_argument('--scheduler', type=str, default="step", choices=['step', 'cosine'],
                         help='Decides how to update the learnrate dynamically.')
-    # extra arguments for scheduler? (for parameters)
+    parser.add_argument('--scheduler_2', type=str, default="step", choices=['step', 'cosine'],
+                        help='Decides how to update the learnrate dynamically -> for the second model(-part).\nFor example for the discriminator part of pix2pix model or the complex part in the residual design model.')
+    parser.add_argument('--use_warm_up', action="store_true", help="Whether to use warm up for optimizer/lr.")
+    parser.add_argument('--warm_up_start_lr', type=float, default=0.00005, help='Warm-Up Start learning rate will end at the lr.')
+    parser.add_argument('--warm_up_step_duration', type=int, default=1000, help='Duration of increasing learning rate in steps (one step = one batch process).')
     parser.add_argument('--activate_amp', action="store_true", help='Activates (Automatically) Mixed Precision and use scaler to loose no details because of the smaller float.')
     parser.add_argument('--amp_scaler', type=str, default=None, choices=[None, 'grad'],
                         help='Decides whichscaler should be used-')
@@ -56,7 +62,7 @@ def get_arg_parser():
     parser.add_argument('--output_dir', type=str, default='../../data/eval', help='Path to save the real and predicted Images.')
 
     # Model Loading
-    parser.add_argument('--model', type=str, default="resfcn", choices=['resfcn', 'pix2pix', 'residual_design_model'],
+    parser.add_argument('--model', type=str, default="resfcn", choices=['resfcn', 'pix2pix', 'residual_design_model', 'physicsformer'],
                         help='Which Model should be choosen')
 
     # ---> ResFCN
@@ -70,6 +76,17 @@ def get_arg_parser():
     parser.add_argument('--pix2pix_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
     parser.add_argument('--pix2pix_out_channels', type=int, default=1, help='How much channels as output?')
     parser.add_argument('--pix2pix_second_loss_lambda', type=float, default=100.0, help='Weighting of second loss.')
+
+    # ---> PhysicsFormer
+    parser.add_argument('--physicsformer_in_channels', type=int, default=1, help='How much channels as input?')
+    parser.add_argument('--physicsformer_out_channels', type=int, default=1, help='How much channels as output?')
+    parser.add_argument('--physicsformer_img_size', type=int, default=256, help='Size of the image (width or height).')
+    parser.add_argument('--physicsformer_patch_size', type=int, default=4, help='Size of patches.')
+    parser.add_argument('--physicsformer_embedded_dim', type=int, default=1026, help='Dimension size of embedding.')
+    parser.add_argument('--physicsformer_num_blocks', type=int, default=8, help='Number of transformer blocks.')
+    parser.add_argument('--physicsformer_heads', type=int, default=16)
+    parser.add_argument('--physicsformer_mlp_dim', type=int, default=2048, help='Dimension of MLP.')
+    parser.add_argument('--physicsformer_dropout', type=float, default=0.1, help='Dropout rate.')
 
     # ---> Residual Design Model
     parser.add_argument('--base_model', type=str, default="pix2pix", choices=['resfcn', 'pix2pix'],
@@ -104,6 +121,18 @@ def get_arg_parser():
     parser.add_argument('--pix2pix_2_out_channels', type=int, default=1, help='How much channels as output?')
     parser.add_argument('--pix2pix_2_second_loss_lambda', type=float, default=100.0, help='Weighting of second loss.')
 
+    # ---> PhysicsFormer Model 2
+    parser.add_argument('--physicsformer_in_channels_2', type=int, default=1, help='How much channels as input?')
+    parser.add_argument('--physicsformer_out_channels_2', type=int, default=1, help='How much channels as output?')
+    parser.add_argument('--physicsformer_img_siz_2', type=int, default=256, help='Size of the image (width or height).')
+    parser.add_argument('--physicsformer_patch_size_2', type=int, default=4, help='Size of patches.')
+    parser.add_argument('--physicsformer_embedded_dim_2', type=int, default=1026, help='Dimension size of embedding.')
+    parser.add_argument('--physicsformer_num_blocks_2', type=int, default=8, help='Number of transformer blocks.')
+    parser.add_argument('--physicsformer_heads_2', type=int, default=16)
+    parser.add_argument('--physicsformer_mlp_dim_2', type=int, default=2048, help='Dimension of MLP.')
+    parser.add_argument('--physicsformer_dropout_2', type=float, default=0.1, help='Dropout rate.')
+
+
     # Data
     parser.add_argument('--data_variation', type=str, default='sound_baseline', choices=['sound_baseline', 'sound_reflection', 'sound_diffraction', 'sound_combined'],
                         help='Name of the dataset variation.')
@@ -122,7 +151,7 @@ def get_arg_parser():
     
     # Experiment Tracking
     parser.add_argument('--experiment_name', type=str, default="image-to-image", help='Name of the overall experiment (will stay the same over most runs).')
-    parser.add_argument('--run_name', type=str, default="image-to-image", help='Name of the specific run.')
+    parser.add_argument('--run_name', type=str, default="image-to-image", help='Name of the specific run. Will be used for naming but will add "YEAR-MONTH-DAY_HOUR_MINUTE" in front of your choosen name.')
     parser.add_argument('--tensorboard_path', type=str, default="../tensorboard", help='Where should the results from tensorboard be saved to?')
     parser.add_argument('--save_path', type=str, default="../train_inference", help='Where should the results from your model be saved to?')
     parser.add_argument('--cmap', type=str, default="gray", help='Color Map for saving images.')

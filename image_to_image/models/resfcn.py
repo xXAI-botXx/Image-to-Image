@@ -33,9 +33,12 @@ class ResFCN(nn.Module):
 
     It uses Fully Convolutional Network (FCN) and Residual Connections.
     """
-    def __init__(self, in_channels=1, hidden_channels=64, out_channels=1, num_blocks=64):
+    def __init__(self, input_channels=1, hidden_channels=64, output_channels=1, num_blocks=64):
         super().__init__()
-        self.pre_layer = nn.Conv2d(in_channels, hidden_channels, kernel_size=7, padding=3)
+        self.input_channels = input_channels
+        self.output_channels = output_channels
+
+        self.pre_layer = nn.Conv2d(input_channels, hidden_channels, kernel_size=7, padding=3)
 
         kernel_sizes = [1, 3, 5, 7, 9]
         residual_fcn_layers = []
@@ -48,8 +51,14 @@ class ResFCN(nn.Module):
                                    ]
         self.residual_fcn_layers = nn.Sequential(*residual_fcn_layers)
 
-        self.post_layer = nn.Conv2d(hidden_channels, out_channels, kernel_size=3, padding=1)
+        self.post_layer = nn.Conv2d(hidden_channels, output_channels, kernel_size=3, padding=1)
 
+    
+    def get_input_channels(self):
+        return self.input_channels
+
+    def get_output_channels(self):
+        return self.output_channels
 
     def forward(self, x):
         x = self.pre_layer(x)

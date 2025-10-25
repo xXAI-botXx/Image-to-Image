@@ -31,7 +31,9 @@ from ..data.residual_physgen import PhysGenResidualDataset, to_device
 from ..models.resfcn import ResFCN
 from ..models.pix2pix import Pix2Pix
 from ..models.residual_design_model import ResidualDesignModel
+from ..models.transformer import PhysicFormer
 from ..losses.weighted_combined_loss import WeightedCombinedLoss
+from ..scheduler.warm_up import WarmUpScheduler
 
 
 
@@ -42,15 +44,49 @@ def get_model(model_name, args, criterion, device):
     model_name = model_name.lower()
 
     if model_name== "resfcn":
-        model = ResFCN(in_channels=args.resfcn_in_channels, hidden_channels=args.resfcn_hidden_channels, out_channels=args.resfcn_out_channels, num_blocks=args.resfcn_num_blocks).to(device)
+        model = ResFCN(input_channels=args.resfcn_in_channels, 
+                       hidden_channels=args.resfcn_hidden_channels, 
+                       output_channels=args.resfcn_out_channels,
+                         num_blocks=args.resfcn_num_blocks).to(device)
     elif model_name == "resfcn_2":
-        model = ResFCN(in_channels=args.resfcn_2_in_channels, hidden_channels=args.resfcn_2_hidden_channels, out_channels=args.resfcn_2_out_channels, num_blocks=args.resfcn_2_num_blocks).to(device)
+        model = ResFCN(input_channels=args.resfcn_2_in_channels, 
+                       hidden_channels=args.resfcn_2_hidden_channels, 
+                       output_channels=args.resfcn_2_out_channels, 
+                       num_blocks=args.resfcn_2_num_blocks).to(device)
     elif model_name == "pix2pix":
-        model = Pix2Pix(input_channels=args.pix2pix_in_channels, output_channels=args.pix2pix_out_channels, hidden_channels=args.pix2pix_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_second_loss_lambda).to(device)
+        model = Pix2Pix(input_channels=args.pix2pix_in_channels, 
+                        output_channels=args.pix2pix_out_channels, 
+                        hidden_channels=args.pix2pix_hidden_channels, 
+                        second_loss=criterion, 
+                        lambda_second=args.pix2pix_second_loss_lambda).to(device)
     elif model_name == "pix2pix_2":
-        model = Pix2Pix(input_channels=args.pix2pix_2_in_channels, output_channels=args.pix2pix_2_out_channels, hidden_channels=args.pix2pix_2_hidden_channels, second_loss=criterion, lambda_second=args.pix2pix_2_second_loss_lambda).to(device)
+        model = Pix2Pix(input_channels=args.pix2pix_2_in_channels, 
+                        output_channels=args.pix2pix_2_out_channels, 
+                        hidden_channels=args.pix2pix_2_hidden_channels, 
+                        second_loss=criterion, 
+                        lambda_second=args.pix2pix_2_second_loss_lambda).to(device)
+    elif model_name == "physicsformer":
+        model = PhysicFormer(input_channels=args.physicsformer_in_channels, 
+                             output_channels=args.physicsformer_out_channels, 
+                             img_size=args.physicsformer_img_size, 
+                             patch_size=args.physicsformer_patch_size, 
+                             embedded_dim=args.physicsformer_embedded_dim, 
+                             num_blocks=args.physicsformer_num_blocks,
+                             heads=args.physicsformer_heads, 
+                             mlp_dim=args.physicsformer_mlp_dim, 
+                             dropout=args.physicsformer_dropout).to(device)
+    elif model_name == "physicsformer_2":
+        model = PhysicFormer(input_channels=args.physicsformer_in_channels_2, 
+                             output_channels=args.physicsformer_out_channels_2, 
+                             img_size=args.physicsformer_img_size_2, 
+                             patch_size=args.physicsformer_patch_size_2, 
+                             embedded_dim=args.physicsformer_embedded_dim_2, 
+                             num_blocks=args.physicsformer_num_blocks_2,
+                             heads=args.physicsformer_heads_2, 
+                             mlp_dim=args.physicsformer_mlp_dim_2, 
+                             dropout=args.physicsformer_dropout_2).to(device)
     else:
-        raise ValueError(f"'{model_name}' is not an supported model.")
+        raise ValueError(f"'{model_name}' is not a supported model.")
 
     return model
 
@@ -58,6 +94,7 @@ def get_model(model_name, args, criterion, device):
 
 def get_loss(loss_name, args):
     loss_name = loss_name.lower()
+
     if loss_name == "l1":
         criterion = nn.L1Loss()
     elif loss_name == "l1_2":
@@ -91,16 +128,46 @@ def get_loss(loss_name, args):
                         weight_blur=args.wc_loss_weight_blur_2
                     )    
     else:
-        raise ValueError(f"'{loss_name}' is not an supported loss.")
+        raise ValueError(f"'{loss_name}' is not a supported loss.")
     
     return criterion
 
 
 
+def get_optimizer(optimizer_name, model, lr, args):
+    optimizer_name = optimizer_name.lower()
+
+    weight_decay_rate = args.weight_decay_rate if args.weight_decay else 0
+
+    if args.optimizer.lower() == "adam":
+        optimizer = optim.Adam(model.parameters(), lr=lr,  betas=(0.5, 0.999), weight_decay=weight_decay_rate)
+    elif args.optimizer.lower() == "adamw":
+        optimizer = optim.AdamW(model.parameters(), lr=lr,  betas=(0.5, 0.999), weight_decay=weight_decay_rate)
+    else:
+        raise ValueError(f"'{optimizer_name}' is not a supported optimizer.")
+    
+    return optimizer
+
+
+
+def get_scheduler(scheduler_name, optimizer, args):
+    scheduler_name = scheduler_name.lower()
+
+    if scheduler_name == "step":
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
+    elif scheduler_name == "cosine":
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    else:
+        raise ValueError(f"'{scheduler_name}' is not a supported scheduler.")
+    
+    return scheduler
+
+
+
 def backward_model(model, x, y, optimizer, criterion, device, epoch, amp_scaler, gradient_clipping_threshold=None):
     if isinstance(model, Pix2Pix):
-        # if epoch is None or epoch % 2 == 0:
-        model.discriminator_step(x, y, optimizer[1], amp_scaler, device, gradient_clipping_threshold)
+        if epoch is None or epoch % 2 == 0:
+            model.discriminator_step(x, y, optimizer[1], amp_scaler, device, gradient_clipping_threshold)
         loss, _, _ = model.generator_step(x, y, optimizer[0], amp_scaler, device, gradient_clipping_threshold)
     elif amp_scaler:
         # reset gradients 
@@ -216,12 +283,34 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
 
             if save_path:
                 # os.makedirs(save_path, exist_ok=True)
-                plt.imsave(os.path.join(save_path, f"{epoch}_prediction.png"), 
+                prediction_path = os.path.join(save_path, f"{epoch}_prediction.png")
+                plt.imsave(prediction_path, 
                         y_predict[0].detach().cpu().numpy().squeeze(), cmap=cmap)
-                plt.imsave(os.path.join(save_path, f"{epoch}_input.png"), 
+                mlflow.log_artifact(prediction_path, artifact_path="images")
+
+                input_path = os.path.join(save_path, f"{epoch}_input.png")
+                plt.imsave(input_path, 
                         x[0][0].detach().cpu().numpy().squeeze(), cmap=cmap)
-                plt.imsave(os.path.join(save_path, f"{epoch}_ground_truth.png"), 
+                mlflow.log_artifact(input_path, artifact_path="images")
+
+                ground_truth_path = os.path.join(save_path, f"{epoch}_ground_truth.png")
+                plt.imsave(ground_truth_path, 
                         y[0].detach().cpu().numpy().squeeze(), cmap=cmap)
+                mlflow.log_artifacts(ground_truth_path, artifact_path="images")
+
+                # alternative direct save:
+                # import numpy as np
+                # import io
+                # from PIL import Image
+
+                # img = (y[0].detach().cpu().squeeze().numpy() * 255).astype(np.uint8)
+                # img_pil = Image.fromarray(img)
+
+                # buf = io.BytesIO()
+                # img_pil.save(buf, format='PNG')
+                # buf.seek(0)
+
+                # mlflow.log_image(image=img_pil, artifact_file=f"images/{epoch}_ground_truth.png")
                 
         is_first_round = False
 
@@ -231,6 +320,10 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
 
 # checkpoint helper
 def save_checkpoint(model, optimizer, scheduler, epoch, path='ckpt.pth'):
+    if not path.endswith(".pth"):
+        path += ".pth"
+
+    # set content to save
     checkpoint_saving = {'epoch': epoch, 'model_state': model.state_dict()}
 
     if isinstance(optimizer, (list, tuple)):
@@ -248,6 +341,12 @@ def save_checkpoint(model, optimizer, scheduler, epoch, path='ckpt.pth'):
     # save checkpoint
     torch.save(checkpoint_saving, path)
 
+    # save info txt
+    root_path, name = os.path.split(path)
+    info_name = ".".join(name.split(".")[:-1]) + ".txt"
+    with open(os.path.join(root_path, info_name), "w") as f:
+        f.write("Last Model saved in epoch: {epoch}, at: {prime.get_time(pattern='DAY.MONTH.YEAR HOUR:MINUTE O\'Clock', time_zone='Europe/Berlin')}")
+
 
 
 # ---------------------------
@@ -262,6 +361,8 @@ def train(args=None):
     # Parse arguments
     if args is None:
         args = parse_args()
+
+    CURRENT_SAVE_NAME = prime.get_time(pattern="YEAR-MONTH-DAY_HOUR_MINUTE_", time_zone="Europe/Berlin") + args.run_name
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
@@ -299,31 +400,39 @@ def train(args=None):
     else:
         model = get_model(model_name=args.model, args=args, criterion=criterion, device=device)
 
+    INPUT_CHANNELS = model.get_input_channels()
+
     # Optimizer
-    weight_decay_rate = args.weight_decay_rate if args.weight_decay else 0
-    if args.optimizer.lower() == "adam":
-        if args.model.lower() == "pix2pix":
-            optimizer = [optim.Adam(model.generator.parameters(), lr=args.lr, weight_decay=weight_decay_rate), 
-                         optim.Adam(model.discriminator.parameters(), lr=args.lr, weight_decay=weight_decay_rate)]
-        elif args.model.lower() == "residual_design_model":
-            optimizer = [optim.Adam(model.base_model.parameters(), lr=args.lr, weight_decay=weight_decay_rate),
-                         optim.Adam(model.complex_model.parameters(), lr=args.lr, weight_decay=weight_decay_rate)]
-        else:
-            optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=weight_decay_rate)
+    if args.model.lower() == "pix2pix":
+        optimizer = [get_optimizer(optimizer_name=args.optimizer, model=model.generator, lr=args.lr, args=args),
+                     get_optimizer(optimizer_name=args.optimizer_2, model=model.discriminator, lr=args.lr, args=args)]
+    elif args.model.lower() == "residual_design_model":
+        optimizer = [get_optimizer(optimizer_name=args.optimizer, model=model.base_model, lr=args.lr, args=args),
+                     get_optimizer(optimizer_name=args.optimizer_2, model=model.complex_model, lr=args.lr, args=args)]
     else:
-        raise ValueError(f"'{args.optimizer}' is not an supported optimizer.")
+        optimizer = get_optimizer(optimizer_name=args.optimizer, model=model, lr=args.lr, args=args)
 
     # Scheduler
-    if args.scheduler.lower() == "step":
-        if args.model.lower() in ["pix2pix", "residual_design_model"]:
-            scheduler = [
-                optim.lr_scheduler.StepLR(optimizer[0], step_size=10, gamma=0.9),
-                optim.lr_scheduler.StepLR(optimizer[1], step_size=10, gamma=0.9)
-            ]
-        else:
-            scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
+    if args.model.lower() in ["pix2pix", "residual_design_model"]:
+        scheduler = [get_scheduler(scheduler_name=args.scheduler, optimizer=optimizer[0], args=args),
+                     get_scheduler(scheduler_name=args.scheduler_2, optimizer=optimizer[1], args=args)]
     else:
-        raise ValueError(f"'{args.scheduler}' is not an supported scheduler.")
+        get_scheduler(scheduler_name=args.scheduler, optimizer=optimizer, args=args)
+
+    # Warm-Up Scheduler
+    if args.use_warm_up:
+        if isinstance(scheduler, (tuple, list)):
+            new_scheduler = []
+            for cur_scheduler in scheduler:
+                new_scheduler += [WarmUpScheduler(start_lr=args.warm_up_start_lr, end_lr=args.lr, optimizer=cur_scheduler.optimizer, scheduler=cur_scheduler, step_duration=args.warm_up_step_duration)]
+
+            scheduler = new_scheduler
+        else:
+            if scheduler is not None:
+                cur_optimizer = scheduler.optimizer
+            else:
+                cur_optimizer = None
+            scheduler = WarmUpScheduler(start_lr=args.warm_up_start_lr, end_lr=args.lr, optimizer=cur_optimizer, scheduler=scheduler, step_duration=args.warm_up_step_duration)
 
     # AMP Scaler
     if args.activate_amp == False:
@@ -334,13 +443,13 @@ def train(args=None):
         raise ValueError(f"'{args.amp_scaler}' is not an supported scaler.")
 
     # setup checkpoint saving
-    checkpoint_save_dir = os.path.join(args.checkpoint_save_dir, args.experiment_name, args.run_name)
+    checkpoint_save_dir = os.path.join(args.checkpoint_save_dir, args.experiment_name, CURRENT_SAVE_NAME)
     os.makedirs(checkpoint_save_dir, exist_ok=True)
     shutil.rmtree(checkpoint_save_dir)
     os.makedirs(checkpoint_save_dir, exist_ok=True)
 
     # setup intermediate image saving
-    save_path = os.path.join(args.save_path, args.experiment_name, args.run_name)
+    save_path = os.path.join(args.save_path, args.experiment_name, CURRENT_SAVE_NAME)
     os.makedirs(save_path, exist_ok=True)
     shutil.rmtree(save_path)
     os.makedirs(save_path, exist_ok=True)
@@ -357,7 +466,7 @@ def train(args=None):
         # mlflow.get_experiment_by_name(experiment_name)
 
     # Start MLflow run
-    with mlflow.start_run(run_name=args.run_name):
+    with mlflow.start_run(run_name=CURRENT_SAVE_NAME):
 
         # Log hyperparameters
         # mlflow.log_params(vars(args))
@@ -377,6 +486,9 @@ def train(args=None):
             "gradient_clipping": args.gradient_clipping,
             "gradient_clipping_threshold": args.gradient_clipping_threshold,
             "scheduler": args.scheduler,
+            "use_warm_up": args.use_warm_up,
+            "warm_up_start_lr": args.warm_up_start_lr,
+            "warm_up_step_duration": args.warm_up_step_duration,
             "use_amp": args.activate_amp,
             "amp_scaler": args.amp_scaler,
             "save_only_best_model": args.save_only_best_model,
@@ -404,6 +516,16 @@ def train(args=None):
             "pix2pix_out_channels": args.pix2pix_out_channels,
             "pix2pix_second_loss_lambda": args.pix2pix_second_loss_lambda,
 
+            "physicsformer_in_channels": args.physicsformer_in_channels,
+            "physicsformer_out_channels": args.physicsformer_out_channels,
+            "physicsformer_img_size": args.physicsformer_img_size,
+            "physicsformer_patch_size": args.physicsformer_patch_size,
+            "physicsformer_embedded_dim": args.physicsformer_embedded_dim,
+            "physicsformer_num_blocks": args.physicsformer_num_blocks,
+            "physicsformer_heads": args.physicsformer_heads,
+            "physicsformer_mlp_dim": args.physicsformer_mlp_dim,
+            "physicsformer_dropout": args.physicsformer_dropout,
+
             # Data
             "data_variation": args.data_variation,
             "input_type": args.input_type,
@@ -413,7 +535,7 @@ def train(args=None):
 
             # Experiment tracking
             "experiment_name": args.experiment_name,
-            "run_name": args.run_name,
+            "run_name": CURRENT_SAVE_NAME,
             "tensorboard_path": args.tensorboard_path,
             "save_path": args.save_path,
             "checkpoint_save_dir": checkpoint_save_dir,
@@ -424,7 +546,7 @@ def train(args=None):
             "complex_model": args.complex_model,
             "combine_mode": args.combine_mode,
 
-            # ---- Loss (2nd branch) ----
+            # ---- Loss (2nd branch)
             "loss_2": args.loss_2,
             "wc_loss_silog_lambda_2": args.wc_loss_silog_lambda_2,
             "wc_loss_weight_silog_2": args.wc_loss_weight_silog_2,
@@ -436,17 +558,28 @@ def train(args=None):
             "wc_loss_weight_range_2": args.wc_loss_weight_range_2,
             "wc_loss_weight_blur_2": args.wc_loss_weight_blur_2,
 
-            # ---- ResFCN Model 2 ----
+            # ---- ResFCN Model 2
             "resfcn_2_in_channels": args.resfcn_2_in_channels,
             "resfcn_2_hidden_channels": args.resfcn_2_hidden_channels,
             "resfcn_2_out_channels": args.resfcn_2_out_channels,
             "resfcn_2_num_blocks": args.resfcn_2_num_blocks,
 
-            # ---- Pix2Pix Model 2 ----
+            # ---- Pix2Pix Model 2
             "pix2pix_2_in_channels": args.pix2pix_2_in_channels,
             "pix2pix_2_hidden_channels": args.pix2pix_2_hidden_channels,
             "pix2pix_2_out_channels": args.pix2pix_2_out_channels,
             "pix2pix_2_second_loss_lambda": args.pix2pix_2_second_loss_lambda,
+
+            # ---- PhysicsFormer Model 2
+            "physicsformer_in_channels_2": args.physicsformer_in_channels_2,
+            "physicsformer_out_channels_2": args.physicsformer_out_channels_2,
+            "physicsformer_img_size_2": args.physicsformer_img_size_2,
+            "physicsformer_patch_size_2": args.physicsformer_patch_size_2,
+            "physicsformer_embedded_dim_2": args.physicsformer_embedded_dim_2,
+            "physicsformer_num_blocks_2": args.physicsformer_num_blocks_2,
+            "physicsformer_heads_2": args.physicsformer_heads_2,
+            "physicsformer_mlp_dim_2": args.physicsformer_mlp_dim_2,
+            "physicsformer_dropout_2": args.physicsformer_dropout_2,
         })
 
         print(f"Train dataset size: {len(train_dataset)} | Validation dataset size: {len(val_dataset)}")
@@ -456,10 +589,20 @@ def train(args=None):
         })
 
         # TensorBoard writer
-        tensorboard_path = os.path.join(args.tensorboard_path, args.experiment_name, args.run_name)
+        tensorboard_path = os.path.join(args.tensorboard_path, args.experiment_name, CURRENT_SAVE_NAME)
         os.makedirs(tensorboard_path, exist_ok=True)
         shutil.rmtree(tensorboard_path)
+        os.makedirs(tensorboard_path, exist_ok=True)
         writer = SummaryWriter(log_dir=tensorboard_path)
+
+        # log model architecture
+        #    -> create dataset for that
+        if isinstance(INPUT_CHANNELS, (list, tuple)):
+            dummy_inference_data = [torch.ones(size=(1, channels, 256, 256)).to(device) for channels in INPUT_CHANNELS]
+        else:
+            dummy_inference_data = torch.ones(size=(1, INPUT_CHANNELS, 256, 256)).to(device)
+
+        writer.add_graph(model, dummy_inference_data)
 
         # Run Training
         last_best_loss = float("inf")

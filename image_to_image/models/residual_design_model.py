@@ -18,7 +18,7 @@ class CombineNet(nn.Module):
         super().__init__()
 
         self.model = nn.Sequential(
-            nn.Conv2d(input_channels*2, hidden_channels, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(input_channels, hidden_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(hidden_channels),
             nn.GELU(),
 
@@ -34,9 +34,11 @@ class CombineNet(nn.Module):
         self.last_loss = float("inf")
         self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0001, betas=(0.5, 0.999))
 
+
     def forward(self, x, y):
         return self.model(torch.cat([x, y], dim=1))
     
+
     def backward(self, y_base, y_complex, y):
         self.optimizer.zero_grad()
         y_pred = self.forward(y_base, y_complex)
@@ -62,7 +64,11 @@ class ResidualDesignModel(nn.Module):
         self.complex_model = complex_model
         self.combine_mode = combine_mode
 
-        self.combine_net = CombineNet(input_channels=1, output_channels=1, hidden_channels=32)
+        self.input_channels = (self.base_model.get_input_channels(), self.complex_model.get_input_channels())  # max(self.base_model.get_input_channels(), self.complex_model.get_input_channels())
+        self.output_channels = min(self.base_model.get_output_channels(), self.complex_model.get_output_channels())
+
+        self.combine_net = CombineNet(input_channels=self.base_model.get_output_channels() + self.complex_model.get_output_channels(), 
+                                      output_channels=self.output_channels, hidden_channels=32)
 
         self.alpha = nn.Parameter(torch.tensor(0.5))
         self.alpha_optimizer = optim.Adam([self.alpha], lr=1e-5)
@@ -72,6 +78,14 @@ class ResidualDesignModel(nn.Module):
         self.last_complex_loss = float('nan')
         self.last_combined_loss = float('nan')
         self.last_combined_math_loss = float('nan')
+
+
+    def get_input_channels(self):
+        return self.input_channels
+    
+
+    def get_output_channels(self):
+        return self.output_channels
 
 
     def forward(self, x_base, x_complex):

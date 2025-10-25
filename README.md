@@ -276,11 +276,13 @@ nohup python ./main.py \
   --wc_loss_weight_range 0.0 \
   --wc_loss_weight_blur 0.0 \
   --optimizer adam \
+  --optimizer_2 adam \
   --weight_decay \
   --weight_decay_rate 0.0004 \
   --gradient_clipping \
   --gradient_clipping_threshold 0.5 \
   --scheduler step \
+  --scheduler_2 step \
   --activate_amp \
   --amp_scaler grad \
   --checkpoint_save_dir ./checkpoints \
@@ -303,8 +305,6 @@ nohup python ./main.py \
   > ./logs/pix2pix_rebuild_test.log 2>&1 &
 ```
 
-`taskkill /IM python.exe /F`
-
 Windows:
 ```bash
 start /B python ./main.py ^
@@ -323,11 +323,13 @@ start /B python ./main.py ^
   --wc_loss_weight_range 0.0 ^
   --wc_loss_weight_blur 0.0 ^
   --optimizer adam ^
+  --optimizer_2 adam ^
   --weight_decay ^
   --weight_decay_rate 0.0004 ^
   --gradient_clipping ^
   --gradient_clipping_threshold 0.5 ^
   --scheduler step ^
+  --scheduler_2 step ^
   --activate_amp ^
   --amp_scaler grad ^
   --checkpoint_save_dir ./checkpoints ^
@@ -353,9 +355,9 @@ start /B python ./main.py ^
 ```bash
 start /B python ./main.py ^
   --mode train ^
-  --epochs 100 ^
+  --epochs 50 ^
   --batch_size 16 ^
-  --lr 0.001 ^
+  --lr 0.0005 ^
   --loss weighted_combined ^
   --wc_loss_silog_lambda 0.5 ^
   --wc_loss_weight_silog 0.1 ^
@@ -366,12 +368,14 @@ start /B python ./main.py ^
   --wc_loss_weight_var 0.0 ^
   --wc_loss_weight_range 0.0 ^
   --wc_loss_weight_blur 0.0 ^
-  --optimizer adam ^
+  --optimizer adamw ^
+  --optimizer_2 adam ^
   --weight_decay ^
-  --weight_decay_rate 0.00004 ^
+  --weight_decay_rate 0.01 ^
   --gradient_clipping ^
   --gradient_clipping_threshold 2.0 ^
-  --scheduler step ^
+  --scheduler cosine ^
+  --scheduler_2 step ^
   --activate_amp ^
   --amp_scaler grad ^
   --checkpoint_save_dir ./checkpoints ^
@@ -381,7 +385,7 @@ start /B python ./main.py ^
   --pix2pix_in_channels 1 ^
   --pix2pix_hidden_channels 64 ^
   --pix2pix_out_channels 1 ^
-  --pix2pix_second_loss_lambda 10.0 ^
+  --pix2pix_second_loss_lambda 500.0 ^
   --data_variation sound_reflection ^
   --input_type osm ^
   --output_type standard ^
@@ -451,28 +455,28 @@ start /B python ./main.py ^
   --mode train ^
   --epochs 100 ^
   --batch_size 16 ^
-  --lr 0.0001 ^
+  --lr 0.001 ^
   --loss weighted_combined ^
   --wc_loss_silog_lambda 0.5 ^
-  --wc_loss_weight_silog 1.0 ^
-  --wc_loss_weight_grad 50.0 ^
-  --wc_loss_weight_ssim 100.0 ^
-  --wc_loss_weight_edge_aware 50.0 ^
-  --wc_loss_weight_l1 10.0 ^
+  --wc_loss_weight_silog 0.1 ^
+  --wc_loss_weight_grad 5.0 ^
+  --wc_loss_weight_ssim 10.0 ^
+  --wc_loss_weight_edge_aware 5.0 ^
+  --wc_loss_weight_l1 1.0 ^
   --wc_loss_weight_var 0.0 ^
   --wc_loss_weight_range 0.0 ^
   --wc_loss_weight_blur 0.0 ^
-  --optimizer adam ^
+  --optimizer adamw ^
   --weight_decay ^
-  --weight_decay_rate 0.0004 ^
+  --weight_decay_rate 0.05 ^
   --gradient_clipping ^
-  --gradient_clipping_threshold 0.5 ^
+  --gradient_clipping_threshold 2.0 ^
   --scheduler step ^
   --activate_amp ^
   --amp_scaler grad ^
   --checkpoint_save_dir ./checkpoints ^
   --save_only_best_model ^
-  --validation_interval 5 ^
+  --validation_interval 2 ^
   --model resfcn ^
   --resfcn_in_channels 1 ^
   --resfcn_hidden_channels 64 ^
@@ -512,11 +516,13 @@ nohup python ./main.py \
   --wc_loss_weight_range 0.0 \
   --wc_loss_weight_blur 0.0 \
   --optimizer adam \
+  --optimizer_2 adam \
   --weight_decay \
   --weight_decay_rate 0.0004 \
   --gradient_clipping \
   --gradient_clipping_threshold 0.5 \
   --scheduler step \
+  --scheduler_2 step \
   --activate_amp \
   --amp_scaler grad \
   --checkpoint_save_dir ./checkpoints \

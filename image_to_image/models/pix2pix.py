@@ -23,14 +23,16 @@ class MMC(nn.Module):  # MinMaxClamping
 def unet_down_block(in_channels=1, out_channels=1, normalize=True):
     layers = [nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1, bias=False)]
     if normalize:
-        layers += [nn.BatchNorm2d(out_channels)]
+        # layers += [nn.BatchNorm2d(out_channels)]
+        layers += [nn.InstanceNorm2d(out_channels, affine=True)]
     layers += [nn.LeakyReLU(0.2, inplace=True)]
     return nn.Sequential(*layers)
 
 def unet_up_block(in_channels=1, out_channels=1, dropout=0.0):
     layers = [
         nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1, bias=False),
-        nn.BatchNorm2d(out_channels),
+        # nn.BatchNorm2d(out_channels),
+        nn.InstanceNorm2d(out_channels, affine=True),
         nn.ReLU(inplace=True)
         #   # better? -> may make an module/activation
     ]
@@ -129,6 +131,9 @@ class Pix2Pix(nn.Module):
     def __init__(self, input_channels=1, output_channels=1, hidden_channels=64, 
                  second_loss=nn.L1Loss(), lambda_second=100):
         super().__init__()
+        self.input_channels = input_channels
+        self.output_channels = output_channels
+
         self.generator = UNetGenerator(input_channels=input_channels, 
                                        output_channels=output_channels, 
                                        hidden_channels=hidden_channels)
@@ -142,6 +147,12 @@ class Pix2Pix(nn.Module):
         self.last_generator_adversarial_loss = float("inf")
         self.last_generator_second_loss = float("inf")
         self.last_discriminator_loss = float("inf")
+
+    def get_input_channels(self):
+        return self.input_channels
+    
+    def get_output_channels(self):
+        return self.output_channels
 
     def get_dict(self):
         return {

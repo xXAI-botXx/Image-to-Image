@@ -188,6 +188,10 @@ class WeightedCombinedLoss(nn.Module):
         loss_range = self.range_loss(pred, target)
         loss_blur = self.blur_loss(pred, target)
 
+        # reset avgs
+        if self.steps > 24:
+            self.step()
+
         self.avg_loss_silog += loss_silog
         self.avg_loss_grad += loss_grad
         self.avg_loss_ssim += loss_ssim
@@ -208,9 +212,10 @@ class WeightedCombinedLoss(nn.Module):
             self.weight_range * loss_range +
             self.weight_blur * loss_blur
         )
+
         return total_loss
 
-    def step(self, epoch):
+    def step(self, epoch=None):
         self.avg_loss_silog = 0
         self.avg_loss_grad = 0
         self.avg_loss_ssim = 0
