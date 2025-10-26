@@ -25,15 +25,39 @@ Content:
 ---
 ### Installation
 
-```bash
-conda create -n img-to-img python=3.13 pip -y
-conda activate img-to-img
-pip install --no-cache-dir -r requirements.txt
+There are different ways to use this package:
+1. Clone/Download the repo and use it then:
+    ```bash
+    conda create -n img-to-img python=3.13 pip -y
+    conda activate img-to-img
+    pip install --no-cache-dir -r requirements.txt
+    ```
+    For a GPU version you can run this afterwards:
+    ```bash
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126
+    ```
+2. Install this package from PyPI:
+    ```bash
+    conda create -n img-to-img python=3.13 pip -y
+    conda activate img-to-img
+    pip install --no-cache-dir image-to-image
+    ```
+    Or with gpu:
+    ```bash
+    conda create -n img-to-img python=3.13 pip -y
+    conda activate img-to-img
+    pip install --no-cache-dir image-to-image[gpu]
+    ```
+    Or:
+    ```bash
+    conda create -n img-to-img python=3.13 pip -y
+    conda activate img-to-img
+    pip install --no-cache-dir image-to-image
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126
+    ```
 
-pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu130
-```
+> Use your CUDA version needed. You may want to check with `nvidia-smi`.
 
-Use your CUDA needed. You may want to check with `nvidia-smi`.
 
 
 <br>

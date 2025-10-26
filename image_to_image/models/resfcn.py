@@ -1,3 +1,12 @@
+"""
+Module to define a simple CNN Model for image to image. 
+
+Classes:
+- ResidualBlock
+- ResFCN
+
+By Tobia Ippolito
+"""
 # ---------------------------
 #        > Imports <
 # ---------------------------
@@ -10,13 +19,40 @@ import torch.nn as nn
 #      > Residual FCN <
 # ---------------------------
 class ResidualBlock(nn.Module):
+    """
+    A simple residual block using fully convolutional layers.
+
+    The block applies two convolutional layers with an activation in between
+    and adds the input to the output (skip connection) to preserve features.
+    """
     def __init__(self, channels, kernel_size=3, padding=1):
+        """
+        Initializes the ResidualBlock.
+
+        Parameters:
+        - channels (int): 
+            Number of input and output channels.
+        - kernel_size (int): 
+            Kernel size for the convolutional layers (default=3).
+        - padding (int): 
+            Padding for the convolutional layers to maintain spatial dimensions (default=1).
+        """
         super().__init__()
         self.pre_fcn = nn.Conv2d(channels, channels, kernel_size=kernel_size, padding=padding)
         self.activation = nn.GELU()
         self.post_fcn = nn.Conv2d(channels, channels, kernel_size=kernel_size, padding=padding)
 
     def forward(self, x):
+        """
+        Forward pass through the ResidualBlock.
+
+        Parameters:
+        - x (torch.tensor): 
+            Input tensor of shape [B, C, H, W].
+
+        Returns:
+        - torch.tensor: Output tensor after residual connection, same shape as input.
+        """
         fcn_x = self.pre_fcn(x)
         fcn_x = self.activation(fcn_x)
         fcn_x = self.post_fcn(fcn_x)
@@ -29,11 +65,28 @@ class ResidualBlock(nn.Module):
 # ---------------------------
 class ResFCN(nn.Module):
     """
-    This is a very simple Image to Image model.
+    A simple image-to-image model using Fully Convolutional Networks (FCN) with residual connections.
 
-    It uses Fully Convolutional Network (FCN) and Residual Connections.
+    Architecture:
+    - Initial convolution layer to increase channel depth.
+    - Sequence of ResidualBlocks with varying kernel sizes.
+    - Final convolution layer to project back to output channels.
+    - Output is clamped between 0.0 and 1.0.
     """
     def __init__(self, input_channels=1, hidden_channels=64, output_channels=1, num_blocks=64):
+        """
+        Initializes the ResFCN model.
+
+        Parameters:
+        - input_channels (int): 
+            Number of channels in the input image (default=1).
+        - hidden_channels (int): 
+            Number of channels in hidden layers / residual blocks (default=64).
+        - output_channels (int): 
+            Number of channels in the output image (default=1).
+        - num_blocks (int): 
+            Number of residual blocks to apply (default=64).
+        """
         super().__init__()
         self.input_channels = input_channels
         self.output_channels = output_channels
@@ -55,12 +108,36 @@ class ResFCN(nn.Module):
 
     
     def get_input_channels(self):
+        """
+        Returns the number of input channels used by the model.
+
+        Returns:
+        - int: 
+            Number of input channels expected by the model.
+        """
         return self.input_channels
 
     def get_output_channels(self):
+        """
+        Returns the number of output channels produced by the model.
+
+        Returns:
+        - int: 
+            Number of output channels the model generates
+        """
         return self.output_channels
 
     def forward(self, x):
+        """
+        Forward pass through the ResFCN model.
+
+        Parameters:
+        - x (torch.tensor): 
+            Input image tensor of shape [B, C, H, W].
+
+        Returns:
+        - torch.tensor: Output image tensor, same spatial size as input, values clamped between 0.0 and 1.0.
+        """
         x = self.pre_layer(x)
 
         x = self.residual_fcn_layers(x)

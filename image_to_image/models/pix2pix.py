@@ -1,3 +1,19 @@
+"""
+Module to define a Pix2Pix Model. 
+A UNet CNN Generator combined with a small generative loss.
+
+Functions:
+- unet_down_block
+- unet_up_block
+
+Classes:
+- MMC
+- UNetGenerator
+- Discriminator
+- Pix2Pix
+
+By Tobia Ippolito
+"""
 # ---------------------------
 #        > Imports <
 # ---------------------------
@@ -12,15 +28,53 @@ from torch.amp import autocast
 #       > Generator <
 # ---------------------------
 class MMC(nn.Module):  # MinMaxClamping
+    """
+    Min-Max Clamping Module.
+
+    Clamps input tensor values between a specified minimum and maximum.
+
+    Parameter:
+    - min (float): 
+        Minimum allowed value (default=0.0).
+    - max (float): 
+        Maximum allowed value (default=1.0).
+
+    Usage:
+    - Can be used at the output layer of a generator to ensure predictions remain in a valid range.
+    """
     def __init__(self, min=0.0, max=1.0):
         super().__init__()
         self.min = min
         self.max = max
 
     def forward(self, x):
+        """
+        Forward pass.
+
+        Parameter:
+        - x (torch.tensor): 
+            Input tensor.
+
+        Returns:
+        - torch.tensor: Clamped tensor with values between `min` and `max`.
+        """
         return torch.clamp(x, self.min, self.max)
 
 def unet_down_block(in_channels=1, out_channels=1, normalize=True):
+    """
+    Creates a U-Net downsampling block.
+
+    Parameter:
+    - in_channels (int): 
+        Number of input channels.
+    - out_channels (int): 
+        Number of output channels.
+    - normalize (bool): 
+        Whether to apply instance normalization.
+
+    Returns:
+    - nn.Sequential: Convolutional downsampling block with LeakyReLU activation.
+    """
     layers = [nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1, bias=False)]
     if normalize:
         # layers += [nn.BatchNorm2d(out_channels)]
@@ -29,12 +83,25 @@ def unet_down_block(in_channels=1, out_channels=1, normalize=True):
     return nn.Sequential(*layers)
 
 def unet_up_block(in_channels=1, out_channels=1, dropout=0.0):
+    """
+    Creates a U-Net upsampling block.
+
+    Parameter:
+    - in_channels (int): 
+        Number of input channels.
+    - out_channels (int): 
+        Number of output channels.
+    - dropout (float): 
+        Dropout probability (default=0).
+
+    Returns:
+    - nn.Sequential: Transposed convolutional block with ReLU activation and optional dropout.
+    """
     layers = [
         nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1, bias=False),
         # nn.BatchNorm2d(out_channels),
         nn.InstanceNorm2d(out_channels, affine=True),
         nn.ReLU(inplace=True)
-        #   # better? -> may make an module/activation
     ]
     
     if dropout:
@@ -42,6 +109,22 @@ def unet_up_block(in_channels=1, out_channels=1, dropout=0.0):
     return nn.Sequential(*layers)
 
 class UNetGenerator(nn.Module):
+    """
+    U-Net Generator for image-to-image translation.
+
+    Architecture:
+    - 8 downsampling blocks (encoder)
+    - 8 upsampling blocks (decoder) with skip connections
+    - Sigmoid activation at output for [0,1] pixel normalization
+
+    Parameter:
+    - input_channels (int): 
+        Number of input image channels.
+    - output_channels (int): 
+        Number of output image channels.
+    - hidden_channels (int): 
+        Base hidden channels for first layer.
+    """
     def __init__(self, input_channels=1, output_channels=1, hidden_channels=64):
         super().__init__()
         # Encoder
@@ -70,6 +153,16 @@ class UNetGenerator(nn.Module):
         )
 
     def forward(self, x):
+        """
+        Forward pass of the U-Net generator.
+
+        Parameter:
+        - x (torch.tensor): 
+            Input image tensor (batch_size, input_channels, H, W).
+
+        Returns:
+        - torch.tensor: Generated output tensor (batch_size, output_channels, H, W).
+        """
         d1 = self.down1(x)
         d2 = self.down2(d1)
         d3 = self.down3(d2)
@@ -97,7 +190,33 @@ class UNetGenerator(nn.Module):
 # ---------------------------
 # PatchGAN
 class Discriminator(nn.Module):
+    """
+    PatchGAN Discriminator for Pix2Pix GAN.
+
+    Parameter:
+    - input_channels (int): 
+        Number of input channels (typically input + target channels concatenated).
+    - hidden_channels (int): 
+        Base hidden channels for first layer.
+
+    Architecture:
+    - 5 convolutional blocks with LeakyReLU and batch normalization.
+    - Outputs a 2D patch map of predictions.
+    """
     def __init__(self, input_channels=6, hidden_channels=64):
+        """
+        Initializes a PatchGAN discriminator.
+
+        The discriminator evaluates input-target image pairs to determine
+        if they are real or generated (fake). It progressively downsamples
+        the spatial dimensions while increasing the number of feature channels.
+
+        Parameters:
+        - input_channels (int): 
+            Number of input channels, typically input + target concatenated (default=6).
+        - hidden_channels (int): 
+            Number of channels in the first convolutional layer; doubled in subsequent layers (default=64).
+        """
         super().__init__()
         self.model = nn.Sequential(
             nn.Conv2d(input_channels, hidden_channels, kernel_size=4, stride=2, padding=1),
@@ -119,6 +238,18 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, x, y):
+        """
+        Forward pass of the discriminator.
+
+        Parameter:
+        - x (torch.tensor): 
+            Input image tensor.
+        - y (torch.tensor): 
+            Target or generated image tensor.
+
+        Returns:
+        - torch.tensor: PatchGAN output tensor predicting real/fake for each patch.
+        """
         # concatenate input and target channels
         return self.model(torch.cat([x, y], dim=1))
 
@@ -128,8 +259,50 @@ class Discriminator(nn.Module):
 #         > Pix2Pix <
 # ---------------------------
 class Pix2Pix(nn.Module):
+    """
+    Pix2Pix GAN for image-to-image translation.
+
+    Components:
+    - Generator: U-Net generator producing synthetic images.
+    - Discriminator: PatchGAN discriminator evaluating real vs fake images.
+    - Adversarial loss: Binary cross-entropy.
+    - Optional second loss for pixel-wise supervision.
+
+    Parameter:
+    - input_channels (int): 
+        Number of input channels.
+    - output_channels (int): 
+        Number of output channels.
+    - hidden_channels (int): 
+        Base hidden channels for both generator and discriminator.
+    - second_loss (nn.Module): 
+        Optional secondary loss (default: L1Loss).
+    - lambda_second (float): 
+        Weight for secondary loss in generator optimization.
+    """
     def __init__(self, input_channels=1, output_channels=1, hidden_channels=64, 
                  second_loss=nn.L1Loss(), lambda_second=100):
+        """
+        Initializes the Pix2Pix GAN model.
+
+        Components:
+        - Generator: U-Net architecture for producing synthetic images.
+        - Discriminator: PatchGAN for evaluating real vs. fake images.
+        - Adversarial loss: Binary cross-entropy to train the generator to fool the discriminator.
+        - Optional secondary loss: Pixel-wise supervision (default: L1Loss).
+
+        Parameter:
+        - input_channels (int): 
+            Number of channels in the input images (default=1).
+        - output_channels (int): 
+            Number of channels in the output images (default=1).
+        - hidden_channels (int): 
+            Base number of hidden channels in the generator and discriminator (default=64).
+        - second_loss (nn.Module): 
+            Optional secondary loss for the generator (default: nn.L1Loss()).
+        - lambda_second (float): 
+            Weight applied to the secondary loss in generator optimization (default=100).
+        """
         super().__init__()
         self.input_channels = input_channels
         self.output_channels = output_channels
@@ -149,12 +322,35 @@ class Pix2Pix(nn.Module):
         self.last_discriminator_loss = float("inf")
 
     def get_input_channels(self):
+        """
+        Returns the number of input channels used by the model.
+
+        Returns:
+        - int: 
+            Number of input channels expected by the model.
+        """
         return self.input_channels
     
     def get_output_channels(self):
+        """
+        Returns the number of output channels produced by the model.
+
+        Returns:
+        - int: 
+            Number of output channels the model generates
+        """
         return self.output_channels
 
     def get_dict(self):
+        """
+        Returns a dictionary with the most recent loss values.
+
+        Returns:
+        - dict: Loss components (base, complex).
+
+        Notes:
+        - Useful for logging or monitoring training progress.
+        """
         return {
                 f"loss_generator": self.last_generator_loss, 
                 f"loss_generator_adversarial": self.last_generator_adversarial_loss, 
@@ -163,9 +359,52 @@ class Pix2Pix(nn.Module):
                }
 
     def forward(self, x):
+        """
+        Forward pass through the generator.
+
+        Parameter:
+        - x (torch.tensor): 
+            Input tensor.
+
+        Returns:
+        - torch.tensor: Generated output image.
+        """
         return self.generator(x)
 
     def generator_step(self, x, y, optimizer, amp_scaler, device, gradient_clipping_threshold):
+        """
+        Performs a single optimization step for the generator.
+
+        This includes:
+        - Forward pass through the generator and discriminator.
+        - Computing adversarial loss (generator tries to fool the discriminator).
+        - Computing optional secondary loss (e.g., L1 or MSE).
+        - Backpropagation and optimizer step, optionally with AMP and gradient clipping.
+
+        Parameters:
+        - x (torch.tensor): 
+            Input tensor for the generator (e.g., source image).
+        - y (torch.tensor): 
+            Target tensor for supervised secondary loss.
+        - optimizer (torch.optim.Optimizer): 
+            Optimizer for the generator parameters.
+        - amp_scaler (torch.cuda.amp.GradScaler or None): 
+            Automatic mixed precision scaler.
+        - device (torch.device): 
+            Device for AMP autocast.
+        - gradient_clipping_threshold (float or None): 
+            Max norm for gradient clipping; if None, no clipping.
+
+        Returns:
+        - tuple(torch.tensor, torch.tensor, torch.tensor):
+            - Total generator loss (adversarial + secondary).
+            - Adversarial loss component.
+            - Secondary loss component (weighted by `lambda_second`).
+
+        Notes:
+        - If AMP is enabled, gradients are scaled and unscaled appropriately.
+        - `last_generator_loss`, `last_generator_adversarial_loss`, and `last_generator_second_loss` are updated.
+        """
         if amp_scaler:
             with autocast(device_type=device.type):
                 # make predictions
@@ -211,6 +450,39 @@ class Pix2Pix(nn.Module):
         return loss_total, loss_adversarial, loss_second
 
     def discriminator_step(self, x, y, optimizer, amp_scaler, device, gradient_clipping_threshold):
+        """
+        Performs a single optimization step for the discriminator.
+
+        This includes:
+        - Forward pass through the discriminator for both real and fake samples.
+        - Computing adversarial loss (binary cross-entropy) for real vs fake patches.
+        - Backpropagation and optimizer step, optionally with AMP and gradient clipping.
+
+        Parameters:
+        - x (torch.tensor): 
+            Input tensor (e.g., source image).
+        - y (torch.tensor): 
+            Target tensor (real image) for the discriminator.
+        - optimizer (torch.optim.Optimizer): 
+            Optimizer for the discriminator parameters.
+        - amp_scaler (torch.cuda.amp.GradScaler or None): 
+            Automatic mixed precision scaler.
+        - device (torch.device): 
+            Device for AMP autocast.
+        - gradient_clipping_threshold (float or None): 
+            Max norm for gradient clipping; if None, no clipping.
+
+        Returns:
+        - tuple(torch.tensor, torch.tensor, torch.tensor):
+            - Total discriminator loss (mean of real and fake losses).
+            - Loss for real samples.
+            - Loss for fake samples.
+
+        Notes:
+        - Fake images are detached from the generator to prevent updating its weights.
+        - `last_discriminator_loss` is updated.
+        - Supports AMP and optional gradient clipping for stability.
+        """
         if amp_scaler:
             with autocast(device_type=device.type): 
                 # make predictions

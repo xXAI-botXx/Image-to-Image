@@ -10,6 +10,88 @@ import textwrap
 #     > Argument Parser <
 # ---------------------------
 def get_arg_parser():
+    """
+    Creates and configures an argument parser for the Image-to-Image framework.
+
+    This function defines and groups all command-line arguments required for 
+    training, validation, and inference of different image-to-image translation 
+    models (e.g., ResFCN, Pix2Pix, PhysicsFormer, Residual Design Model).
+    It includes parameters for model configuration, dataset handling, 
+    optimization, loss weighting, experiment tracking, and hardware setup.
+
+    Returns:
+    - argparse.ArgumentParser: 
+        A fully configured argument parser with all options and default values.
+
+    Argument Groups:
+        General:
+            --mode: Operation mode ('train', 'test', 'inference').
+
+        Training:
+            --checkpoint_save_dir: Directory to store model checkpoints.
+            --save_only_best_model: If set, saves only the best model based on validation loss.
+            --checkpoint_interval: Interval (in epochs) to save model checkpoints.
+            --validation_interval: Interval (in epochs) for validation.
+            --epochs: Number of total training epochs.
+            --batch_size: Number of samples per training batch.
+            --lr: Base learning rate.
+            --loss: Loss function to use ('l1', 'crossentropy', 'weighted_combined').
+
+        Weighted Combined Loss Parameters (for primary and secondary models):
+            --wc_loss_silog_lambda, --wc_loss_weight_silog, --wc_loss_weight_grad, etc.
+            Fine-tuning coefficients for each subcomponent of the weighted combined loss.
+
+        Optimization:
+            --optimizer, --optimizer_2: Optimizer types (e.g., Adam, AdamW).
+            --weight_decay: Enable or disable weight decay regularization.
+            --weight_decay_rate: Coefficient for weight decay.
+            --gradient_clipping: Enable or disable gradient clipping.
+            --gradient_clipping_threshold: Maximum gradient norm threshold.
+            --scheduler, --scheduler_2: Learning rate scheduler types ('step', 'cosine').
+            --use_warm_up: Enable warm-up phase for the optimizer.
+            --warm_up_start_lr, --warm_up_step_duration: Warm-up configuration.
+
+        Mixed Precision:
+            --activate_amp: Enables Automatic Mixed Precision (AMP) training.
+            --amp_scaler: Type of AMP scaler to use ('grad' or None).
+
+        Inference:
+            --model_params_path: Path to saved model checkpoint for inference.
+            --image_dir_path: Directory containing images for inference.
+            --output_dir: Output directory for predicted images.
+
+        Model Selection:
+            --model: Choice of model architecture ('resfcn', 'pix2pix', 'residual_design_model', 'physicsformer').
+
+        Model-Specific Parameters:
+            * ResFCN:
+                --resfcn_in_channels, --resfcn_hidden_channels, --resfcn_out_channels, --resfcn_num_blocks
+            * Pix2Pix:
+                --pix2pix_in_channels, --pix2pix_hidden_channels, --pix2pix_out_channels, --pix2pix_second_loss_lambda
+            * PhysicsFormer:
+                --physicsformer_in_channels, --physicsformer_out_channels, --physicsformer_img_size,
+                --physicsformer_patch_size, --physicsformer_embedded_dim, --physicsformer_num_blocks,
+                --physicsformer_heads, --physicsformer_mlp_dim, --physicsformer_dropout
+            * Residual Design Model:
+                --base_model, --complex_model, --combine_mode
+                (includes separate parameters for the second model branch, e.g., *_2)
+
+        Data:
+            --data_variation: Dataset variant to use (e.g., 'sound_baseline', 'sound_reflection').
+            --input_type, --output_type: Define input/output representation types.
+            --fake_rgb_output: Converts single-channel input into fake RGB format.
+            --make_14_dividable_size: Ensures image dimensions are multiples of 14.
+
+        Hardware:
+            --device: Compute device ('cpu' or 'cuda').
+
+        Experiment Tracking:
+            --experiment_name: Group name for MLflow and TensorBoard logging.
+            --run_name: Specific run name (timestamp is prepended automatically).
+            --tensorboard_path: Directory for TensorBoard logs.
+            --save_path: Path for saving generated images during training/inference.
+            --cmap: Color map used for visualization of images.
+    """
     parser = argparse.ArgumentParser(description="Image-to-Image Framework - train and inferencing")
 
     # General Parameter
@@ -166,6 +248,19 @@ def get_arg_parser():
 #     > Get Arguments <
 # ---------------------------
 def parse_args():
+    """
+    Parses command-line arguments for the Image-to-Image framework.
+
+    This function calls `get_arg_parser()` to construct the full parser, 
+    then reads and returns all command-line arguments provided by the user.
+    The returned namespace contains all configuration parameters for 
+    training, validation, and inference.
+
+    Returns:
+    - argparse.Namespace: 
+        Parsed arguments containing configuration for model setup, 
+        data handling, training hyperparameters, and logging options.
+    """
     parser = get_arg_parser()
     args = parser.parse_args()
     return args

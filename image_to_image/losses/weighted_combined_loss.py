@@ -1,3 +1,14 @@
+"""
+Module to define a Weighted Combine Loss.
+
+Functions:
+- calc_weight_map
+
+Classes:
+- WeightedCombinedLoss
+
+By Tobia Ippolito
+"""
 # ---------------------------
 #        > Imports <
 # ---------------------------
@@ -13,6 +24,21 @@ import kornia
 #   > Loss Implementation <
 # ---------------------------
 class WeightedCombinedLoss(nn.Module):
+    """
+    Computes a weighted combination of multiple loss functions for image-to-image tasks.
+
+    Supported losses:
+        - SILog loss
+        - Gradient L1 loss
+        - SSIM loss
+        - Edge-aware loss
+        - L1 loss
+        - Variance loss
+        - Range loss
+        - Blur loss
+
+    The losses can be weighted individually, and average losses are tracked across steps.
+    """
     def __init__(self, 
                  silog_lambda=0.5, 
                  weight_silog=0.5, 
@@ -23,6 +49,29 @@ class WeightedCombinedLoss(nn.Module):
                  weight_var=1.0,
                  weight_range=1.0,
                  weight_blur=1.0):
+        """
+        Initializes the WeightedCombinedLoss with optional weights for each component.
+
+        Parameter:
+        - silog_lambda (float): 
+            SILog lambda parameter.
+        - weight_silog (float): 
+            Weight for SILog loss.
+        - weight_grad (float): 
+            Weight for gradient L1 loss.
+        - weight_ssim (float): 
+            Weight for SSIM loss.
+        - weight_edge_aware (float): 
+            Weight for edge-aware loss.
+        - weight_l1 (float): 
+            Weight for L1 loss.
+        - weight_var (float): 
+            Weight for variance loss.
+        - weight_range (float): 
+            Weight for range loss.
+        - weight_blur (float): 
+            Weight for blur loss.
+        """
         super().__init__()
         self.silog_lambda = silog_lambda
         self.weight_silog = weight_silog
@@ -171,6 +220,22 @@ class WeightedCombinedLoss(nn.Module):
         return F.l1_loss(pred_lap, target_lap)
 
     def forward(self, pred, target, weight_map=None, should_calc_weight_map=False):
+        """
+        Computes the weighted combined loss between prediction and target.
+
+        Parameter:
+        - pred (torch.Tensor): 
+            Predicted output tensor.
+        - target (torch.Tensor): 
+            Ground truth tensor.
+        - weight_map (torch.Tensor or None): 
+            Optional pixel-wise weighting map.
+        - should_calc_weight_map (bool): 
+            If True and weight_map is None, calculates a weight map from target.
+
+        Returns:
+        - torch.Tensor: Weighted sum of all losses.
+        """
         if type(weight_map) == type(None):
             if should_calc_weight_map:
                 weight_map = calc_weight_map(target)
@@ -216,6 +281,9 @@ class WeightedCombinedLoss(nn.Module):
         return total_loss
 
     def step(self, epoch=None):
+        """
+        Resets the running averages of all tracked losses.
+        """
         self.avg_loss_silog = 0
         self.avg_loss_grad = 0
         self.avg_loss_ssim = 0
@@ -227,6 +295,13 @@ class WeightedCombinedLoss(nn.Module):
         self.steps = 0
 
     def get_avg_losses(self):
+        """
+        Returns the running average of all individual losses.
+
+        Returns:
+        - tuple: (avg_loss_silog, avg_loss_grad, avg_loss_ssim, avg_loss_l1,
+                avg_loss_edge_aware, avg_loss_var, avg_loss_range, avg_loss_blur)
+        """
         return (self.avg_loss_silog/self.steps,
                 self.avg_loss_grad/self.steps,
                 self.avg_loss_ssim/self.steps,
@@ -238,6 +313,12 @@ class WeightedCombinedLoss(nn.Module):
                )
 
     def get_dict(self):
+        """
+        Returns a dictionary of average losses and their corresponding weights.
+
+        Returns:
+        - dict: All loss components with their weights.
+        """
         loss_silog, loss_grad, loss_ssim, loss_l1, loss_edge_aware, loss_var, loss_range, loss_blur = self.get_avg_losses()
         return {
                 f"loss_silog": loss_silog, 
@@ -259,6 +340,18 @@ class WeightedCombinedLoss(nn.Module):
                }
 
 def calc_weight_map(target):
+    """
+    Calculates a per-pixel weighting map for a target tensor based on unique value frequencies.
+
+    Less frequent values are given higher weights to emphasize their contribution in loss computations.
+
+    Parameter:
+    - target (torch.Tensor): 
+        Ground truth tensor.
+
+    Returns:
+    - torch.Tensor: Weight map tensor of the same shape as target.
+    """
     values, counts = torch.unique(target.flatten(), return_counts=True)
     all_counts = counts.sum().float()
     

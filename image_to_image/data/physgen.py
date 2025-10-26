@@ -1,5 +1,9 @@
 """
-PhysGen Dataset
+PhysGen Dataset Loader
+
+PyTorch DataLoader.
+
+Also provide some functions for downloading the dataset.
 
 See:
 - https://huggingface.co/datasets/mspitzna/physicsgen
@@ -33,13 +37,23 @@ import prime_printer as prime
 # ---------------------------
 def resize_tensor_to_divisible_by_14(tensor: torch.Tensor) -> torch.Tensor:
     """
-    Resize a tensor to the next smaller (H, W) divisible by 14.
-    
-    Args:
-        tensor (torch.Tensor): Input tensor of shape (C, H, W) or (B, C, H, W)
-    
+    Resize a tensor so that its height and width are divisible by 14.
+
+    This function ensures the spatial dimensions (H, W) of a given tensor 
+    are compatible with architectures that require sizes divisible by 14 
+    (e.g., ResNet, ResFCN). It resizes using bilinear interpolation.
+
+    Parameter:
+    - tensor (torch.Tensor): 
+        Input tensor of shape (C, H, W) or (B, C, H, W).
+
     Returns:
-        torch.Tensor: Resized tensor
+    - torch.Tensor: 
+        Resized tensor with dimensions divisible by 14.
+
+    Raises:
+    - ValueError: 
+        If the tensor has neither 3 nor 4 dimensions.
     """
     if tensor.dim() == 3:
         c, h, w = tensor.shape
@@ -62,21 +76,38 @@ def resize_tensor_to_divisible_by_14(tensor: torch.Tensor) -> torch.Tensor:
 #        > Dataset <
 # ---------------------------
 class PhysGenDataset(Dataset):
+    """
+    PyTorch Dataset wrapper for the PhysicsGen dataset.
 
+    Loads the PhysGen dataset from Hugging Face and provides configurable
+    input/output modes for physics-based generative learning tasks.
+
+    The dataset contains Open Sound Maps (OSM) and simulated soundmaps
+    for tasks involving sound propagation modeling.
+    """
     def __init__(self, variation="sound_baseline", mode="train", input_type="osm", output_type="standard", 
                  fake_rgb_output=False, make_14_dividable_size=False):
         """
         Loads PhysGen Dataset.
 
-        Parameters:
-        - variation : str
-            Chooses the used dataset variant: sound_baseline, sound_reflection, sound_diffraction, sound_combined.
-        - mode : str
-            Can be "train", "test", "validation".
-        - input_type : str
-            Defines the used Input -> "osm", "base_simulation"
-        - output_type : str
-            Defines the Output -> "standard", "complex_only"
+        Parameter:
+        - variation (str, default='sound_baseline'): 
+            Dataset variation to load. Options include:
+            {'sound_baseline', 'sound_reflection', 'sound_diffraction', 'sound_combined'}.
+        - mode (str, default='train'): 
+            Dataset split to use. Options: {'train', 'test', 'validation'}.
+        - input_type (str, default='osm'): 
+            Defines the input image type:
+            - 'osm': open sound map input.
+            - 'base_simulation': uses the baseline sound simulation as input.
+        - output_type (str, default='standard'): 
+            Defines the output image type:
+            - 'standard': full soundmap prediction.
+            - 'complex_only': difference from baseline soundmap.
+        - fake_rgb_output (bool, default=False): 
+            If True, replicates single-channel inputs to fake RGB (3-channel).
+        - make_14_dividable_size (bool, default=False): 
+            If True, resizes tensors so that height and width are divisible by 14.
         """
         self.fake_rgb_output = fake_rgb_output
         self.make_14_dividable_size = make_14_dividable_size
@@ -98,9 +129,35 @@ class PhysGenDataset(Dataset):
         print(f"PhysGen ({variation}) Dataset for {mode} got created")
 
     def __len__(self):
+        """
+        Returns the number of available samples.
+
+        Returns:
+        - int: 
+            Number of samples in the dataset split.
+        """
         return len(self.dataset)
 
     def __getitem__(self, idx):
+        """
+        Retrieve an input-target pair from the dataset.
+
+        This function loads the input image and corresponding target image,
+        applies transformations (resizing, fake RGB, etc.), and returns
+        them as PyTorch tensors.
+
+        Parameter: 
+        - idx (int): 
+            Index of the data sample.
+
+        Returns: 
+        - tuple[torch.Tensor, torch.Tensor]<br>
+            A tuple containing:
+            - input_img : torch.Tensor<br>
+                Input tensor (shape: [C, H, W]).
+            - target_img : torch.Tensor<br>
+                Target tensor (shape: [C, H, W]).
+        """
         sample = self.dataset[idx]
         # print(sample)
         # print(sample.keys())
@@ -145,6 +202,28 @@ class PhysGenDataset(Dataset):
 # For external not internal
 
 def get_dataloader(mode='train', variation="sound_reflection", input_type="osm", output_type="complex_only", shuffle=True):
+    """
+    Create a PyTorch DataLoader for the PhysGen dataset.
+
+    This helper simplifies loading the PhysGen dataset for training,
+    validation, or testing.
+
+    Parameter:
+    - mode (str, default='train'): 
+        Dataset split to use ('train', 'test', 'validation').
+    - variation (str, default='sound_reflection'): 
+        Dataset variation to load.
+    - input_type (str, default='osm'): 
+        Defines the input type ('osm' or 'base_simulation').
+    - output_type (str, default='complex_only'): 
+        Defines the output type ('standard' or 'complex_only').
+    - shuffle (bool, default=True): 
+        Whether to shuffle the dataset between epochs.
+
+    Returns:
+    - torch.utils.data.DataLoader: 
+        DataLoader that provides batches of PhysGen samples.
+    """
     dataset = PhysGenDataset(mode=mode, variation=variation, input_type=input_type, output_type=output_type)
     return DataLoader(dataset, batch_size=1, shuffle=shuffle, num_workers=1)
 
@@ -152,6 +231,32 @@ def get_dataloader(mode='train', variation="sound_reflection", input_type="osm",
 
 def get_image(mode='train', variation="sound_reflection", input_type="osm", output_type="complex_only", shuffle=True, 
               return_output=False, as_numpy_array=True):
+    """
+    Retrieve one image (input and optionally output) from the PhysGen dataset.
+
+    Provides an easy way to visualize or inspect a single PhysGen sample
+    without manually instantiating a DataLoader.
+
+    Parameter:
+    - mode (str, default='train'): 
+        Dataset split ('train', 'test', 'validation').
+    variation (str, default='sound_reflection'): 
+        Dataset variation.
+    input_type (str, default='osm'): 
+        Defines the input type ('osm' or 'base_simulation').
+    output_type (str, default='complex_only'): 
+        Defines the output type ('standard' or 'complex_only').
+    shuffle (bool, default=True): 
+        Randomly select the sample.
+    return_output (bool, default=False): 
+        If True, returns both input and target tensors.
+    as_numpy_array (bool, default=True): 
+        If True, converts tensors to NumPy arrays for easier visualization.
+
+    Returns: 
+    - numpy.ndarray or list[numpy.ndarray]: 
+        Input image as NumPy array, or a list [input, target] if `return_output` is True.
+    """
     dataset = PhysGenDataset(mode=mode, variation=variation, input_type=input_type, output_type=output_type)
     loader = DataLoader(dataset, batch_size=1, shuffle=shuffle, num_workers=1)
     cur_data = next(iter(loader))
@@ -186,6 +291,36 @@ def save_dataset(output_real_path, output_osm_path,
                  variation, input_type, output_type,
                  data_mode, 
                  info_print=False, progress_print=True):
+    """
+    Save PhysGen dataset samples as images to disk.
+
+    This function loads the specified PhysGen dataset, converts input and
+    target tensors to images, and saves them as `.png` files for inspection,
+    debugging, or model-agnostic data use.
+
+    Parameter: 
+    - output_real_path (str): 
+        Directory to save target (real) soundmaps.
+    - output_osm_path (str): 
+        Directory to save input (OSM) maps.
+    - variation (str): 
+        Dataset variation (e.g. 'sound_reflection').
+    - input_type (str): 
+        Input type ('osm' or 'base_simulation').
+    - output_type (str): 
+        Output type ('standard' or 'complex_only').
+    - data_mode (str): 
+        Dataset split ('train', 'test', 'validation').
+    - info_print (bool, default=False): 
+        If True, prints detailed information for each saved sample.
+    - progress_print (bool, default=True): 
+        If True, shows progress updates in the console.
+
+    Raises:
+    - ValueError: 
+        If image data falls outside the valid range [0, 255].
+
+    """
     # Clearing
     if os.path.exists(output_osm_path) and os.path.isdir(output_osm_path):
         shutil.rmtree(output_osm_path)
@@ -278,6 +413,22 @@ def save_dataset(output_real_path, output_osm_path,
 #     > Dataset Saving <
 # ---------------------------
 if __name__ == "__main__":
+    """
+    Command-line interface for saving PhysGen dataset samples.
+
+    Allows users to export the PhysGen dataset as image pairs for a given
+    variation, input/output configuration, and mode.
+
+    Example
+    -------
+    >>> python physgen_dataset_loader.py \
+            --output_real_path ./real \
+            --output_osm_path ./osm \
+            --variation sound_reflection \
+            --input_type osm \
+            --output_type standard \
+            --data_mode train
+    """
     import argparse
 
     parser = argparse.ArgumentParser(description="Save OSM and real PhysGen dataset images.")

@@ -2,6 +2,8 @@
 From: https://github.com/physicsgen/physicsgen/blob/main/eval_scripts/sound_metrics.py
 
 Slightly adjusted by Tobia Ippolito
+
+Original programmed by Martin Spitznagel
 """
 import argparse
 import os

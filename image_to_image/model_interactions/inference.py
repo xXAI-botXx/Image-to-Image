@@ -1,3 +1,13 @@
+"""
+Module for inferencing image to image models.
+
+Functions:
+- load_image
+- save_output
+- inference
+
+By Tobia Ippolito
+"""
 # ---------------------------
 #        > Imports <
 # ---------------------------
@@ -20,6 +30,22 @@ from ..models.resfcn import ResFCN
 #    > Inference Helper <
 # ---------------------------
 def load_image(path, width=256, height=256, grayscale=True):
+    """
+    Loads an image from disk, resizes it, converts to tensor, and adds a batch dimension.
+
+    Parameters:
+    - path (str): 
+        Path to the image file.
+    - width (int): 
+        Desired image width after resizing (default=256).
+    - height (int): 
+        Desired image height after resizing (default=256).
+    - grayscale (bool): 
+        Whether to load the image as grayscale (default=True).
+
+    Returns:
+    - torch.Tensor: Image tensor with shape [1, C, H, W], ready for model input.
+    """
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE if grayscale else cv2.IMREAD_COLOR)
     transform = transforms.Compose([
         transforms.Resize((width, height)),
@@ -30,6 +56,15 @@ def load_image(path, width=256, height=256, grayscale=True):
 
 
 def save_output(tensor, path):
+    """
+    Saves a tensor as an image file to disk.
+
+    Parameters:
+    - tensor (torch.Tensor): 
+        Image tensor to save. Expected shape [B, C, H, W] or [C, H, W].
+    - path (str): 
+        Path where the image will be saved.
+    """
     from torchvision.utils import save_image
     save_image(tensor, path)
 
@@ -38,6 +73,35 @@ def save_output(tensor, path):
 #       > Inference <
 # ---------------------------
 def inference(args=None):
+    """
+    Runs inference using a pre-trained ResFCN model on a dataset or a custom image directory.
+
+    The function supports:
+    - Loading a test dataset if no custom images are provided.
+    - Loading a pre-trained model checkpoint.
+    - Running inference on either dataset or custom images.
+    - Saving predicted outputs to the specified output directory.
+
+    Parameters:
+    - args (Namespace or None): Optional argument namespace, typically from argparse.
+        Required fields in `args`:
+        - device (str): Device for computation ("cuda" or "cpu").
+        - image_dir_path (str or None): Path to custom images (optional).
+        - output_dir (str): Directory where outputs will be saved.
+        - data_variation (str): Dataset variation if using dataset.
+        - input_type (str): Input type for dataset.
+        - output_type (str): Output type for dataset.
+        - fake_rgb_output (bool): Flag for dataset processing.
+        - make_14_dividable_size (bool): Flag for resizing dataset images.
+        - resfcn_in_channels (int): Number of input channels for the ResFCN model.
+        - resfcn_hidden_channels (int): Number of hidden channels for ResFCN.
+        - resfcn_out_channels (int): Number of output channels for ResFCN.
+        - resfcn_num_blocks (int): Number of residual blocks in ResFCN.
+        - model_params_path (str): Path to the saved model checkpoint.
+
+    Returns:
+    - None: The function saves predicted images to disk.
+    """
     if args is None:
         args = parse_args()
 

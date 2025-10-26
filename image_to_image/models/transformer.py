@@ -1,23 +1,55 @@
+"""
+Module to define basic Transformer parts.<br>
+Also defines a Transformer model for image-to-image tasks, the PhysicsFormer.
+
+Classes:
+- PatchEmbedding
+- PositionalEncoding
+- Attention
+- TransformerEncoderBlock
+- PhysicsFormer
+
+By Tobia Ippolito
+"""
 # ---------------------------
 #        > Imports <
 # ---------------------------
 import torch
 import torch.nn as nn
 
+
+
 # ---------------------------
 #        > Patching <
 # ---------------------------
-# Converting an Input Image into Patches ('Tokens' in NLP)
-
 class PatchEmbedding(nn.Module):
     """
-    Converts an Image into Patches.
+    Converts an Image into Patches ('Tokens' in NLP).
 
     Image size must be: H x W x C
 
     Patch size must be: P x P 
     """
     def __init__(self, img_size, patch_size=16, input_channels=1, embedded_dim=768):
+        """
+        Init of Patching.
+
+        Each filter creates one new value for each patch 
+        and this with embedded_dim-filters. <br>
+        So one patch is projected into a 'embedded_dim'-vector. <br>
+        For example the value at [0, 0] on each channel in the embedded image is together 
+        the embedded vector of the first patch.
+
+        Parameter:
+        - img_size (int): 
+            Size (width or height) of your image. Your image must have the same width and height.
+        - patch_size (int, default=16): 
+            Size (width or height) of one patch.
+        - input_channels (int): 
+            Number of Input Channels to be expected.
+        - embedded_dim (int): 
+            Output channels / channels of the embedding.
+        """
         super().__init__()
         self.img_size = img_size
         self.patch_size = patch_size
@@ -27,6 +59,17 @@ class PatchEmbedding(nn.Module):
         self.projection = nn.Conv2d(input_channels, embedded_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
+        """
+        Forward pass of patching.
+
+        Parameter:
+        - x (torch.tensor): 
+            Input Image(s).
+
+        Returns:
+        - tuple(torch.tensor, tuple(int, int)): 
+            The Embedded image with the height and width.
+        """
         # Input:                     (batch_size, in_channels, height, width)
         x = self.projection(x)     # (batch_size, embedded_size, num_patches/2, num_patches/2)
         B, C, H, W = x.shape
@@ -39,27 +82,61 @@ class PatchEmbedding(nn.Module):
 # ---------------------------
 #   > Positional Encoding <
 # ---------------------------
-# Add learnable parameters which adds positional information of the patches 
-# the position of a patch is important, because a picture makes only sense if the other of sub pictures (patches)
-# is right.
 class PositionalEncoding(nn.Module):
+    """
+    Add learnable parameters which adds positional information of the patches 
+    the position of a patch is important, because a picture makes only sense 
+    if the other of sub pictures (patches) is right.
+    """
     def __init__(self, num_patches, embedded_dim=768):
+        """
+        Init of Positonal Encoding.
+
+        Parameter:
+        - num_patches (int): 
+            Amount of Patches ('Tokens').
+        - embedded_dim (int, default=768): 
+            Get amount of the embedding channels.
+        """
         super().__init__()
         self.positional_embedding = nn.Parameter(torch.zeros(1, num_patches, embedded_dim))
 
     def forward(self, x):
+        """
+        Forward pass of positional information adding.
+
+        Parameter:
+        - x (torch.tensor): 
+            Patch Embedded Image(s).
+
+        Returns:
+        - torch.tensor: 
+            The Embedded image(s) with positional encoding added.
+        """
         # use broadcast addition
         return x + self.positional_embedding
+
 
 
 # ---------------------------
 #       > Attention <
 # ---------------------------
-# Basic element of Transformer are the attention-layer.
-# Attention layer computes relations to all patches.
-# This is done by calculating the similarity between 2 learnable vectors ! and K.
 class Attention(nn.Module):
+    """
+    Basic element of Transformer are the attention-layer. <br>
+    Attention layer computes relations to all patches. <br>
+    This is done by calculating the similarity between 2 learnable vectors ! and K.
+    """
     def __init__(self, embedded_dim, num_heads):
+        """
+        Init of Attention Layer.
+
+        Parameter:
+        - embedded_dim (int): 
+            Patch Embedding Channels.
+        - num_heads (int): 
+            Number of parallel attention computations.
+        """
         super().__init__()
         assert embedded_dim % num_heads == 0, \
             f"embedded_dim ({embedded_dim}) must be divisible by num_heads ({num_heads})"
@@ -71,6 +148,17 @@ class Attention(nn.Module):
         self.fc = nn.Linear(embedded_dim, embedded_dim)
 
     def forward(self, x):
+        """
+        Forward pass of Attention Layer.
+
+        Parameter:
+        - x (torch.tensor): 
+            Patch Embedded Image(s) with positional encoding added.
+
+        Returns:
+        - torch.tensor: 
+            The attention cores passed through fully connected layer.
+        """
         batch_size, num_patches, embedded_dim = x.shape
         qkv = self.qkv(x)  # (batch_size, num_patches, embedded_dim*3)
         qkv = qkv.reshape(batch_size, num_patches, 3, self.num_heads, self.head_dim)
@@ -89,12 +177,27 @@ class Attention(nn.Module):
 # ---------------------------
 # > Transformer Encoder Block <
 # ---------------------------
-# A Transformer Encoder Block consists of self-attention layer
-# followed by a feedforward layer (mlp = multilayerperceptron) 
-# + (layer) normalization
-# and with residual connections / skip connections
 class TransformerEncoderBlock(nn.Module):
+    """
+    A Transformer Encoder Block consists of self-attention layer 
+    followed by a feedforward layer (mlp = multilayerperceptron) 
+    + (layer) normalization 
+    and with residual connections / skip connections.
+    """
     def __init__(self, embedded_dim, num_heads, mlp_dim, dropout=0.1):
+        """
+        Init of a Transformer Block.
+
+        Parameter:
+        - embedded_dim (int): 
+            Patch Embedding Channels.
+        - num_heads (int): 
+            Number of parallel attention computations.
+        - mlp_dim (int): 
+            Hidden/Feature dimension of the multi layer perceptron layer.
+        - dropout (float): 
+            Propability of droput regulization.
+        """
         super().__init__()
         self.norm_1 = nn.LayerNorm(embedded_dim)
         self.attention = Attention(embedded_dim=embedded_dim, num_heads=num_heads)
@@ -110,6 +213,17 @@ class TransformerEncoderBlock(nn.Module):
 
     
     def forward(self, x):
+        """
+        Forward pass of Transformer Block.
+
+        Parameter:
+        - x (torch.tensor): 
+            Patch Embedded Image(s) with positional encoding added.
+
+        Returns:
+        - torch.tensor: 
+            The attention cores passed through fully connected layer and a multilayer perceptron with layer normalization.
+        """
         # self attention with skip connection
         x = self.norm_1(x)
         x = x + self.attention(x)
@@ -126,7 +240,24 @@ class TransformerEncoderBlock(nn.Module):
 #     > CNN Refinement <
 # ---------------------------
 class CNNRefinement(nn.Module):
+    """
+    Refinement Network to remove transformer artefacts.
+    """
     def __init__(self, input_channels=1, hidden_channels=64, output_channels=1, skip_connection=True):
+        """
+        Init of a CNN Refinement network.
+
+        Parameter:
+        - input_channels (int): 
+            Number of input channels.
+        - hidden_channels (int): 
+            Number of hidden/feature channels.
+        - output_channels (int): 
+            Number of output channels.
+        - skip_connection (bool): 
+            Should a skip connection be used? Means if a second input (the original image) should be added to the output. 
+            That changes the CNN network to learning a correction which will be applied to the original image.
+        """
         super().__init__()
 
         self.conv_1 = nn.Conv2d(input_channels, hidden_channels, kernel_size=3, stride=1, padding=1)
@@ -150,6 +281,19 @@ class CNNRefinement(nn.Module):
 
     
     def forward(self, x, original=None):
+        """
+        Forward pass of CNN Refinement network.
+
+        Parameter:
+        - x (torch.tensor): 
+            Patch Embedded Image(s) with positional encoding added.
+        - original (torch.tensor or None, default=None): 
+            Original image which will be added at the end if skip_connection is set to true.
+
+        Returns:
+        - torch.tensor: 
+            The refined image.
+        """
         x = self.conv_1(x)
         x = self.activation_1(x)
 
@@ -173,16 +317,48 @@ class CNNRefinement(nn.Module):
 #   - Transformer Blocks
 class PhysicFormer(nn.Module):
     """
-    y_pred = Transformer(x) + CNN(Transformer(x)) + x_input
+    Image-to-Image Transformer.
 
-    CNN(Transformer(x)) = Pure Transformation
-    CNN(Transformer(x)) + x_input = residual refinement
-    Transformer(x) + CNN(Transformer(x)) + x_input = global field + local correction + geometry/residual
+    The whole model consists of:
+    - Patching (tokenizing)
+    - Add positional encoding
+    - Transformer Blocks (Attention + MLP)
+    - Image Reconstruction/Remapping -> Embedded Space to Pixel Space
+    - CNN Refinement
+
+    Model logic:<br>
+    - `CNN(Transformer(x))` = Pure Transformation (skip connection = false)
+    - `CNN(Transformer(x)) + x_input` = residual refinement (skip connection = true)
+    - `Transformer(x) + CNN(Transformer(x)) + x_input` = global field + local correction + geometry/residual (not available yet)
     """
     def __init__(self, input_channels=1, output_channels=1, 
                  img_size=256, patch_size=4, 
                  embedded_dim=1026, num_blocks=8,
                  heads=16, mlp_dim=2048, dropout=0.1):
+        """
+        Init of the PhysicFormer model.
+
+        Parameter:
+        - input_channels (int): 
+            Number of input image channels (e.g., 1 for grayscale, 3 for RGB).
+        - output_channels (int): 
+            Number of output image channels.
+        - img_size (int): 
+            Size (height and width) of the input image in pixels.
+        - patch_size (int): 
+            Size of each square patch to split the image into. 
+            The image must be divisible by this size.
+        - embedded_dim (int): 
+            Dimension of the patch embedding (feature space size per token).
+        - num_blocks (int): 
+            Number of Transformer Encoder blocks.
+        - heads (int): 
+            Number of attention heads per Attention layer.
+        - mlp_dim (int): 
+            Hidden dimension of the feed-forward (MLP) layers within each Transformer block.
+        - dropout (float): 
+            Dropout probability for regularization applied after positional encoding and inside MLP.
+        """
         super().__init__()
         self.input_channels = input_channels
         self.output_channels = output_channels
@@ -213,13 +389,43 @@ class PhysicFormer(nn.Module):
 
 
     def get_input_channels(self):
+        """
+        Returns the number of input channels used by the model.
+
+        Returns:
+        - int: 
+            Number of input channels expected by the model.
+        """
         return self.input_channels
 
     def get_output_channels(self):
+        """
+        Returns the number of output channels produced by the model.
+
+        Returns:
+        - int: 
+            Number of output channels the model generates
+        """
         return self.output_channels
 
 
     def forward(self, x):
+        """
+        Forward pass of the PhysicFormer network.
+
+        Parameter:
+        - x (torch.tensor): 
+            Input image tensor of shape (batch_size, input_channels, height, width).
+
+        Returns:
+        - torch.tensor: 
+            Refined output image tensor of shape (batch_size, output_channels, height, width), 
+            with values normalized to [0.0, 1.0].
+
+        Notes:
+        - The output passes through a `sigmoid()` activation, ensuring all pixel values ∈ [0, 1].
+        - Designed for physics-informed or visual reconstruction tasks where local and global consistency are important.
+        """
         x_input = x
 
         # patch embedding / tokenization

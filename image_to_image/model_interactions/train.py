@@ -1,3 +1,29 @@
+"""
+Module to train, validate, and evaluate image-to-image models. 
+Supports multiple models, losses, optimizers, schedulers, mixed-precision training,
+checkpointing, and experiment tracking with MLflow and TensorBoard.
+
+The train function handles full experiment orchestration including:
+- Argument parsing and device setup.
+- Dataset and dataloader initialization.
+- Model, optimizer, loss function, and scheduler setup.
+- Mixed precision (AMP) and warm-up handling.
+- MLflow and TensorBoard logging.
+- Periodic validation and checkpoint saving.
+
+Functions:
+- get_model
+- get_loss
+- get_optimizer
+- get_scheduler
+- backward_model
+- train_one_epoch
+- evaluate
+- save_checkpoint
+- train
+
+By Tobia Ippolito
+"""
 # ---------------------------
 #        > Imports <
 # ---------------------------
@@ -5,7 +31,6 @@ import sys
 import os
 import shutil
 import time
-import copy
 
 import matplotlib.pyplot as plt
 
@@ -41,6 +66,28 @@ from ..scheduler.warm_up import WarmUpScheduler
 #      > Train Helpers <
 # ---------------------------
 def get_model(model_name, args, criterion, device):
+    """
+    Returns a model instance based on provided arguments.
+
+    Supported models:
+    - ResFCN
+    - Pix2Pix
+    - ResidualDesignModel
+    - PhysicFormer
+
+    Parameter:
+    - model_name (str):
+        Name of the model to initialize.
+    - args:
+        Parsed command-line arguments.
+    - criterion:
+        Criterion for Pix2Pixs second loss. Required during model initialization.
+    - device:
+        Target device (GPU or CPU) on which to place the model.
+
+    Returns:
+    - model (nn.Module): Instantiated PyTorch model on the given device.
+    """
     model_name = model_name.lower()
 
     if model_name== "resfcn":
@@ -93,6 +140,23 @@ def get_model(model_name, args, criterion, device):
 
 
 def get_loss(loss_name, args):
+    """
+    Returns a loss function instance based on the provided loss name.
+
+    Supported losses:
+    - L1 / L1_2
+    - CrossEntropy / CrossEntropy_2
+    - WeightedCombined / WeightedCombined_2
+
+    Parameter:
+    - loss_name (str):
+        Name of the loss function.
+    - args:
+        Parsed command-line arguments with configured loss weights.
+
+    Returns:
+    - criterion (nn.Module): Instantiated loss function.
+    """
     loss_name = loss_name.lower()
 
     if loss_name == "l1":
@@ -135,6 +199,26 @@ def get_loss(loss_name, args):
 
 
 def get_optimizer(optimizer_name, model, lr, args):
+    """
+    Returns an optimizer for the given model.
+
+    Supported optimizers:
+    - Adam
+    - AdamW
+
+    Parameter:
+    - optimizer_name (str):
+        Name of the optimizer.
+    - model (nn.Module):
+        Model whose parameters should be optimized.
+    - lr (float):
+        Learning rate.
+    - args:
+        Parsed command-line arguments with optimizer configuration.
+
+    Returns:
+    - optimizer (torch.optim.Optimizer): Instantiated optimizer.
+    """
     optimizer_name = optimizer_name.lower()
 
     weight_decay_rate = args.weight_decay_rate if args.weight_decay else 0
@@ -151,6 +235,24 @@ def get_optimizer(optimizer_name, model, lr, args):
 
 
 def get_scheduler(scheduler_name, optimizer, args):
+    """
+    Returns a learning rate scheduler for the given optimizer.
+
+    Supported schedulers:
+    - StepLR
+    - CosineAnnealingLR
+
+    Parameter:
+    - scheduler_name (str):
+        Name of the scheduler.
+    - optimizer:
+        Optimizer whose learning rate will be managed.
+    - args:
+        Parsed command-line arguments containing scheduler configuration.
+
+    Returns:
+    - scheduler (torch.optim.lr_scheduler): Instantiated scheduler.
+    """
     scheduler_name = scheduler_name.lower()
 
     if scheduler_name == "step":
@@ -165,6 +267,32 @@ def get_scheduler(scheduler_name, optimizer, args):
 
 
 def backward_model(model, x, y, optimizer, criterion, device, epoch, amp_scaler, gradient_clipping_threshold=None):
+    """
+    Performs a backward pass, optimizer step, and mixed-precision handling.
+
+    Parameter:
+    - model (nn.Module):
+        Model to train.
+    - x (torch.Tensor):
+        Input tensor.
+    - y (torch.Tensor):
+        Target tensor.
+    - optimizer:
+        Optimizer or tuple of optimizers (for Pix2Pix/ResidualDesignModel).
+    - criterion:
+        Loss function.
+    - device (torch.device):
+        Device to perform computation on.
+    - epoch (int):
+        Current training epoch.
+    - amp_scaler (GradScaler):
+        Gradient scaler for mixed-precision training.
+    - gradient_clipping_threshold (float, optional):
+        Maximum allowed gradient norm for clipping.
+
+    Returns:
+    - loss (torch.Tensor): Computed loss value for the batch.
+    """
     if isinstance(model, Pix2Pix):
         if epoch is None or epoch % 2 == 0:
             model.discriminator_step(x, y, optimizer[1], amp_scaler, device, gradient_clipping_threshold)
@@ -198,6 +326,30 @@ def backward_model(model, x, y, optimizer, criterion, device, epoch, amp_scaler,
 
 
 def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, amp_scaler=None, gradient_clipping_threshold=None):
+    """
+    Runs one full epoch of training and returns the average loss.
+
+    Parameter:
+    - model (nn.Module):
+        Model to train.
+    - loader (DataLoader):
+        Data loader containing training batches.
+    - optimizer:
+        Optimizer or tuple of optimizers.
+    - criterion:
+        Loss function or tuple of losses (for multi-stage models).
+    - device (torch.device):
+        Device to use for training.
+    - epoch (int, optional):
+        Current epoch index.
+    - amp_scaler (GradScaler, optional):
+        Mixed-precision scaler.
+    - gradient_clipping_threshold (float, optional):
+        Max allowed gradient norm.
+
+    Returns:
+    - avg_loss (float): Average training loss for the epoch.
+    """
     # change to train mode -> calc gradients
     model.train()
 
@@ -245,6 +397,32 @@ def train_one_epoch(model, loader, optimizer, criterion, device, epoch=None, amp
 
 @torch.no_grad()
 def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_path=None, cmap="gray", use_tqdm=True):
+    """
+    Evaluates the model on the validation set and logs results to TensorBoard or MLflow.
+
+    Parameter:
+    - model (nn.Module):
+        Model to evaluate.
+    - loader (DataLoader):
+        Validation data loader.
+    - criterion:
+        Loss function used for evaluation.
+    - device (torch.device):
+        Device to perform inference on.
+    - writer (SummaryWriter, optional):
+        TensorBoard writer for visualization.
+    - epoch (int, optional):
+        Current epoch index for logging.
+    - save_path (str, optional):
+        Directory to save sample images.
+    - cmap (str):
+        Colormap for saved images.
+    - use_tqdm (bool):
+        Whether to use tqdm progress bar.
+
+    Returns:
+    - avg_loss (float): Average validation loss.
+    """
     model.eval()
 
     total_loss = 0.0
@@ -320,6 +498,24 @@ def evaluate(model, loader, criterion, device, writer=None, epoch=None, save_pat
 
 # checkpoint helper
 def save_checkpoint(model, optimizer, scheduler, epoch, path='ckpt.pth'):
+    """
+    Saves a training checkpoint containing model, optimizer, and scheduler states.
+
+    Parameter:
+    - model (nn.Module):
+        Model to save.
+    - optimizer:
+        Optimizer or list/tuple of optimizers.
+    - scheduler:
+        Scheduler or list/tuple of schedulers.
+    - epoch (int):
+        Current epoch index.
+    - path (str):
+        File path to save checkpoint to ('.pth' extension added automatically).
+
+    Returns:
+    - None
+    """
     if not path.endswith(".pth"):
         path += ".pth"
 
@@ -353,6 +549,40 @@ def save_checkpoint(model, optimizer, scheduler, epoch, path='ckpt.pth'):
 #        > Train Main <
 # ---------------------------
 def train(args=None):
+    """
+    Main training loop for image-to-image tasks.
+
+    Workflow:
+    1. Initializes the training and validation datasets based on model type.
+    2. Constructs the model and its loss functions.
+    3. Configures optimizers, learning rate schedulers, and optional warm-up phases.
+    4. Enables mixed precision (AMP) if selected.
+    5. Sets up MLflow experiment tracking and TensorBoard visualization.
+    6. Executes the epoch loop:
+        - Trains the model for one epoch (`train_one_epoch()`).
+        - Optionally evaluates on the validation set.
+        - Logs metrics and learning rates.
+        - Updates the scheduler.
+        - Saves checkpoints (best or periodic).
+    7. Logs the trained model and experiment results to MLflow upon completion.
+
+    Parameters:
+    - args : argparse.Namespace, optional
+        Parsed command-line arguments containing all training configurations.
+        If None, the function will automatically call `parse_args()` to obtain them.
+    
+    Returns:
+    - None: The function performs training and logging in-place without returning values.
+
+    Notes:
+    - Automatically handles model-specific configurations (e.g., Pix2Pix discriminator, ResidualDesignModel branches).
+    - Uses `prime.get_time()` to generate time-stamped run names.
+    - Supports gradient clipping and various learning rate schedulers.
+
+    Logging:
+    - **MLflow**: Stores metrics, hyperparameters, checkpoints, and final model.
+    - **TensorBoard**: Logs training/validation losses, learning rates, and sub-loss components.
+    """
     print("\n---> Welcome to Image-to-Image Training <---")
 
     print("\nChecking your Hardware:")
@@ -399,6 +629,11 @@ def train(args=None):
                                     combine_mode=args.combine_mode).to(device)
     else:
         model = get_model(model_name=args.model, args=args, criterion=criterion, device=device)
+
+    # get parameter amount
+    n_model_params = 0
+    for cur_model_param in model.parameters():
+        n_model_params += cur_model_param.numel()
 
     INPUT_CHANNELS = model.get_input_channels()
 
@@ -469,8 +704,7 @@ def train(args=None):
     with mlflow.start_run(run_name=CURRENT_SAVE_NAME):
 
         # Log hyperparameters
-        # mlflow.log_params(vars(args))
-        mlflow.log_params({
+        params = {
             # General
             "mode": args.mode,
             "device": str(device),
@@ -506,6 +740,7 @@ def train(args=None):
 
             # Model
             "model": args.model,
+            "n_model_params": n_model_params,
             "resfcn_in_channels": args.resfcn_in_channels,
             "resfcn_hidden_channels": args.resfcn_hidden_channels,
             "resfcn_out_channels": args.resfcn_out_channels,
@@ -580,7 +815,12 @@ def train(args=None):
             "physicsformer_heads_2": args.physicsformer_heads_2,
             "physicsformer_mlp_dim_2": args.physicsformer_mlp_dim_2,
             "physicsformer_dropout_2": args.physicsformer_dropout_2,
-        })
+        }
+        # mlflow.log_params(vars(args))
+        mlflow.log_params(params)
+        
+        params_text = "\n".join([f"{k}: {v}" for k, v in params.items()])
+        writer.add_text("hyperparameters", params_text, 0)
 
         print(f"Train dataset size: {len(train_dataset)} | Validation dataset size: {len(val_dataset)}")
         mlflow.log_metrics({
