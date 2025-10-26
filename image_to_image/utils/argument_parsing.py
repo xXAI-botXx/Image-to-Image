@@ -82,7 +82,7 @@ def get_arg_parser():
     parser.add_argument('--physicsformer_out_channels', type=int, default=1, help='How much channels as output?')
     parser.add_argument('--physicsformer_img_size', type=int, default=256, help='Size of the image (width or height).')
     parser.add_argument('--physicsformer_patch_size', type=int, default=4, help='Size of patches.')
-    parser.add_argument('--physicsformer_embedded_dim', type=int, default=1026, help='Dimension size of embedding.')
+    parser.add_argument('--physicsformer_embedded_dim', type=int, default=1024, help='Dimension size of embedding.')
     parser.add_argument('--physicsformer_num_blocks', type=int, default=8, help='Number of transformer blocks.')
     parser.add_argument('--physicsformer_heads', type=int, default=16)
     parser.add_argument('--physicsformer_mlp_dim', type=int, default=2048, help='Dimension of MLP.')
@@ -124,7 +124,7 @@ def get_arg_parser():
     # ---> PhysicsFormer Model 2
     parser.add_argument('--physicsformer_in_channels_2', type=int, default=1, help='How much channels as input?')
     parser.add_argument('--physicsformer_out_channels_2', type=int, default=1, help='How much channels as output?')
-    parser.add_argument('--physicsformer_img_siz_2', type=int, default=256, help='Size of the image (width or height).')
+    parser.add_argument('--physicsformer_img_size_2', type=int, default=256, help='Size of the image (width or height).')
     parser.add_argument('--physicsformer_patch_size_2', type=int, default=4, help='Size of patches.')
     parser.add_argument('--physicsformer_embedded_dim_2', type=int, default=1026, help='Dimension size of embedding.')
     parser.add_argument('--physicsformer_num_blocks_2', type=int, default=8, help='Number of transformer blocks.')

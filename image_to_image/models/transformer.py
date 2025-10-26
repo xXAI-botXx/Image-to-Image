@@ -61,6 +61,9 @@ class PositionalEncoding(nn.Module):
 class Attention(nn.Module):
     def __init__(self, embedded_dim, num_heads):
         super().__init__()
+        assert embedded_dim % num_heads == 0, \
+            f"embedded_dim ({embedded_dim}) must be divisible by num_heads ({num_heads})"
+
         self.num_heads = num_heads
         self.head_dim = embedded_dim // num_heads
         self.scale = self.head_dim**-0.5  # factor for scaling
@@ -71,7 +74,8 @@ class Attention(nn.Module):
         batch_size, num_patches, embedded_dim = x.shape
         qkv = self.qkv(x)  # (batch_size, num_patches, embedded_dim*3)
         qkv = qkv.reshape(batch_size, num_patches, 3, self.num_heads, self.head_dim)
-        q, k, v = qkv.unbind(dim=2)
+        qkv = qkv.permute(2, 0, 3, 1, 4)  # -(3, batch_size, num_heads, num_patches, head_dim)
+        q, k, v = qkv.unbind(dim=0)
 
         # compute scaled dot-product
         attention_scores = (q@k.transpose(-2, -1)) * self.scale  # (batch_size, num_heads, num_patches, num_patches)
@@ -236,7 +240,8 @@ class PhysicFormer(nn.Module):
         x = self.to_img(x)
 
         # return it in the right format: [B, C, H, W]
-        x = x.transpose(1, 2).view(x.shape[0], self.output_channels, self.patch_size*height, self.patch_size*width)
+        x = x.transpose(1, 2).reshape(x.shape[0], self.output_channels, self.patch_size*height, self.patch_size*width)
+        # when you call .view() right after .transpose(), PyTorch can’t reinterpret the data layout -> this is an error.
 
         # refinement
         x = self.refinement(x, original=x_input)

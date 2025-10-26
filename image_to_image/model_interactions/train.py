@@ -417,7 +417,7 @@ def train(args=None):
         scheduler = [get_scheduler(scheduler_name=args.scheduler, optimizer=optimizer[0], args=args),
                      get_scheduler(scheduler_name=args.scheduler_2, optimizer=optimizer[1], args=args)]
     else:
-        get_scheduler(scheduler_name=args.scheduler, optimizer=optimizer, args=args)
+        scheduler = get_scheduler(scheduler_name=args.scheduler, optimizer=optimizer, args=args)
 
     # Warm-Up Scheduler
     if args.use_warm_up:
