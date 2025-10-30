@@ -15,8 +15,13 @@ from torchvision import datasets, transforms
 from torch import nn
 
 from ..utils.argument_parsing import parse_args
-from .train import evaluate  # reuse the evaluate function
+from ..utils.model_io import load_and_get_model
+
+from .train import evaluate, get_loss  # reuse the evaluate function
+
 from ..data.physgen import PhysGenDataset
+from ..data.residual_physgen import PhysGenResidualDataset
+
 from ..models.resfcn import ResFCN 
 
 
@@ -59,24 +64,23 @@ def test(args=None):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
     # Dataset loading
-    test_dataset = PhysGenDataset(variation=args.data_variation, mode="test", input_type=args.input_type, output_type=args.output_type, 
-                                  fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size)
+    if args.model.lower() == "residual_design_model":
+        test_dataset = PhysGenResidualDataset(variation=args.data_variation, mode="test", 
+                                              fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size,
+                                              reflexion_channels=args.reflexion_channels, reflexion_steps=args.reflexion_steps, reflexions_as_channels=args.reflexions_as_channels)
+    else:
+        test_dataset = PhysGenDataset(variation=args.data_variation, mode="test", input_type=args.input_type, output_type=args.output_type, 
+                                      fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size,
+                                      reflexion_channels=args.reflexion_channels, reflexion_steps=args.reflexion_steps, reflexions_as_channels=args.reflexions_as_channels)
+
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     # Model Loading
-    model = ResFCN(in_channels=args.resfcn_in_channels, hidden_channels=args.resfcn_hidden_channels, out_channels=args.resfcn_out_channels, num_blocks=args.resfcn_num_blocks).to(device)
-
-    # Load weights from checkpoint
-    checkpoint = torch.load(args.model_params_path, map_location=device)
-    model.load_state_dict(checkpoint["model_state"])
+    model, _ = load_and_get_model(args.model_params_path, device, criterion=None)
 
     # Criterion for evaluation
-    if args.loss == "l1":
-        criterion = nn.L1Loss()
-    elif args.loss == "crossentropy":
-        criterion = nn.CrossEntropyLoss()
-    else:
-        raise ValueError(f"'{args.loss}' is not a supported loss.")
+    criterion = get_loss(args.loss, args)
+    print(f"Used Loss: {args.loss}")
 
     # Run evaluation
     test_loss = evaluate(model, test_loader, criterion, device)

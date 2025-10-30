@@ -226,6 +226,12 @@ def get_arg_parser():
                         help='If setted: Input image is putted with 3 channels.')
     parser.add_argument('--make_14_dividable_size', action='store_true',
                         help='Adjusts imagesizes to a multiple of 14 if setted (needed for some networks).')
+    parser.add_argument('--reflexion_channels', action='store_true',
+                        help='If ray-traces should add to the input.')
+    parser.add_argument('--reflexion_steps', type=int, default=36,
+                        help='Defines how many traces should get created.')
+    parser.add_argument('--reflexions_as_channels', action='store_true',
+                        help='If True, every trace gets its own channel, else every trace in one channel.')
 
     # Hardware
     parser.add_argument('--device', type=str, default='cuda', choices=['cpu', 'cuda'],

@@ -23,8 +23,14 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 
 from ..utils.argument_parsing import parse_args
+from ..utils.model_io import load_and_get_model
+
 from ..data.physgen import PhysGenDataset
+from ..data.residual_physgen import PhysGenResidualDataset
+
 from ..models.resfcn import ResFCN 
+
+
 
 # ---------------------------
 #    > Inference Helper <
@@ -69,6 +75,7 @@ def save_output(tensor, path):
     save_image(tensor, path)
 
 
+
 # ---------------------------
 #       > Inference <
 # ---------------------------
@@ -111,16 +118,19 @@ def inference(args=None):
 
     # Data Loading
     if not custom_images:
-        test_dataset = PhysGenDataset(variation=args.data_variation, mode="test", input_type=args.input_type, output_type=args.output_type, 
-                                    fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size)
-        test_loader = DataLoader(test_dataset, batch_size=1)
+        if args.model.lower() == "residual_design_model":
+            test_dataset = PhysGenResidualDataset(variation=args.data_variation, mode="test", 
+                                                  fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size,
+                                                  reflexion_channels=args.reflexion_channels, reflexion_steps=args.reflexion_steps, reflexions_as_channels=args.reflexions_as_channels)
+        else:
+            test_dataset = PhysGenDataset(variation=args.data_variation, mode="test", input_type=args.input_type, output_type=args.output_type, 
+                                           fake_rgb_output=args.fake_rgb_output, make_14_dividable_size=args.make_14_dividable_size,
+                                           reflexion_channels=args.reflexion_channels, reflexion_steps=args.reflexion_steps, reflexions_as_channels=args.reflexions_as_channels)
+
+        test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     
     # Model Loading
-    model = ResFCN(in_channels=args.resfcn_in_channels, hidden_channels=args.resfcn_hidden_channels, out_channels=args.resfcn_out_channels, num_blocks=args.resfcn_num_blocks).to(device)
-
-    checkpoint = torch.load(args.model_params_path, map_location=device)
-    model.load_state_dict(checkpoint["model_state"])
-    model.eval()
+    model, _ = load_and_get_model(args.model_params_path, device, criterion=None)
 
     # input_dir = args.input_dir
     output_dir = args.output_dir
@@ -147,6 +157,9 @@ def inference(args=None):
                 y_pred = model(x)
                 save_output(y, os.path.join(output_dir, cur_file_name))
                 save_output(y_pred, os.path.join(output_dir, cur_file_name.replace("real", "fake")))
+                if isinstance(x, (list, tuple)):
+                    x = x[0]
+                save_output(x, os.path.join(output_dir, cur_file_name.replace("real_B", "real_A")))
                 
                 tqdm.write(f"[{idx}] Saved predictions to {os.path.join(output_dir, cur_file_name.replace("real", "fake"))}")
 

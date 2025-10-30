@@ -184,6 +184,8 @@ class ResidualDesignModel(nn.Module):
         """
         return self.output_channels
 
+    def forward(self, x):
+        self.forward(x[0], x[1])
 
     def forward(self, x_base, x_complex):
         """
@@ -196,6 +198,8 @@ class ResidualDesignModel(nn.Module):
         Returns:
         - torch.tensor: Combined prediction, either via weighted residual or CombineNet.
         """
+        # print(x_base.size)
+        # print(x_complex.size)
         y_base = self.base_model(x_base)
         y_complex = self.complex_model(x_complex)
 
@@ -206,7 +210,7 @@ class ResidualDesignModel(nn.Module):
                 y = y.squeeze(1)
             return y
         else:
-            return self.combine_net(x_base, x_complex)
+            return self.combine_net(y_base, y_complex)
         
     def backward(self, y_base, y_complex, y):
         """

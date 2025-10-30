@@ -212,7 +212,7 @@ mlruns
 tensorboard
 logs
 checkpoints
-
+data
 custom_commands.md
 
 

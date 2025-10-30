@@ -28,6 +28,7 @@ from torch.utils.data import DataLoader, Dataset
 # import torchvision.transforms as transforms
 from torchvision import transforms
 
+import img_phy_sim as ips
 import prime_printer as prime
 
 
@@ -86,7 +87,8 @@ class PhysGenDataset(Dataset):
     for tasks involving sound propagation modeling.
     """
     def __init__(self, variation="sound_baseline", mode="train", input_type="osm", output_type="standard", 
-                 fake_rgb_output=False, make_14_dividable_size=False):
+                 fake_rgb_output=False, make_14_dividable_size=False,
+                 reflexion_channels=False, reflexion_steps=36, reflexions_as_channels=False):
         """
         Loads PhysGen Dataset.
 
@@ -108,9 +110,19 @@ class PhysGenDataset(Dataset):
             If True, replicates single-channel inputs to fake RGB (3-channel).
         - make_14_dividable_size (bool, default=False): 
             If True, resizes tensors so that height and width are divisible by 14.
+        - reflexion_channels (bool, default=False): 
+            If ray-traces should add to the input.
+        - reflexion_steps (int, default=36): 
+            Defines how many traces should get created.
+        - reflexions_as_channels (bool, default=False): 
+            If True, every trace gets its own channel, else every trace in one channel.
         """
         self.fake_rgb_output = fake_rgb_output
         self.make_14_dividable_size = make_14_dividable_size
+        self.reflexion_channels = reflexion_channels
+        self.reflexion_steps = reflexion_steps
+        self.reflexions_as_channels = reflexions_as_channels
+
         self.device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
         # get data
         self.dataset = load_dataset("mspitzna/physicsgen", name=variation, trust_remote_code=True)
@@ -191,6 +203,42 @@ class PhysGenDataset(Dataset):
             target_img = target_img[0] - base_simulation_img[0]
             target_img = target_img.unsqueeze(0)
             target_img *= -1
+
+        # add raytracing
+        if self.reflexion_channels:
+            rays = ips.ray_tracing.trace_beams(rel_position=(0.5, 0.5),	
+                                                img_src=np.squeeze(input_img.cpu().numpy(), axis=0),	
+                                                directions_in_degree=ips.math.get_linear_degree_range(step_size=(self.reflexion_steps/360)*100),	
+                                                wall_values=[0],	
+                                                wall_thickness=0,	
+                                                img_border_also_collide=False,	
+                                                reflexion_order=3,	
+                                                should_scale_rays=True,	
+                                                should_scale_img=False)
+            ray_img = ips.ray_tracing.draw_rays(rays,	
+                                                detail_draw=False,	
+                                                output_format='channels' if self.reflexions_as_channels else 'single_image',	
+                                                img_background=None,	
+                                                ray_value=[50, 100, 255],	
+                                                ray_thickness=1,	
+                                                img_shape=(256, 256),
+                                                should_scale_rays_to_image=True,
+                                                show_only_reflections=True)
+            # (256, 256)
+            # print("CHECKPOINT")
+            # print(ray_img.shape)
+            ray_img = self.transform(ray_img)
+            ray_img = ray_img.float()
+            if ray_img.ndim == 2:
+                ray_img = ray_img.unsqueeze(0)  # (1, H, W)
+
+            # print(ray_img.shape)
+            # print(input_img.shape)
+            # Merging with input image 
+            if ray_img.shape[1:] == input_img.shape[1:]:
+                input_img = torch.cat((input_img, ray_img), dim=0)
+            else:
+                raise ValueError(f"Ray image shape {ray_img.shape} does not match input image shape {input_img.shape}.")
 
         return input_img, target_img
 

@@ -26,6 +26,7 @@ if __name__ == "__main__":
         """
         buildings_39_real_B.png -> buildings_39.png
         buildings_39_fake_B.png -> buildings_39.png
+        buildings_39_input_B.png -> buildings_39.png
         """
         splitted = full_name.split('_')
         return f"{splitted[0]}_{splitted[1]}.png"

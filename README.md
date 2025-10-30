@@ -81,11 +81,11 @@ There are different ways to use this package:
     ```bash
     nvidia-smi
     ```
-5. Preparation -> Folder creation
-  ```bash
-  mkdir logs
-  ```
-6. Run Train script with logging:
+6. Preparation -> Folder creation
+    ```bash
+    mkdir logs
+    ```
+7. Run Train script with logging:
     ```bash
     nohup python ./image-to-image/main.py \
     --mode train \
@@ -155,7 +155,7 @@ There are different ways to use this package:
     --cmap gray `
     > ./logs/resfcn_test.log 2>&1
     ```
-7. Now check you log-file and in worse case stop the run:<br>
+8. Now check you log-file and in worse case stop the run:<br>
     Linux:
     ```bash
     ps aux | grep '[p]ython'
@@ -171,8 +171,8 @@ There are different ways to use this package:
     Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like "*python*" } | Select-Object ProcessId, CommandLine
     Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like "*python*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
     ```
-8. If training is finish, you can open the `. > image_to_image > model_interactions > eval_physgen_benchmark.ipynb` ([or click me](./image_to_image/model_interactions/eval_physgen_benchmark.ipynb)), change the variables and run the code blocks to evaluate your model.
-9. You can also check your mlrun/tensorboard metrics, to find out how the training was -> [see here](#access-experiment-tracking)
+9. If training is finish, you can open the `. > image_to_image > model_interactions > eval_physgen_benchmark.ipynb` ([or click me](./image_to_image/model_interactions/eval_physgen_benchmark.ipynb)), change the variables and run the code blocks to evaluate your model.
+10. You can also check your mlrun/tensorboard metrics, to find out how the training was -> [see here](#access-experiment-tracking)
 
 
 > When pasting multiline commands on windows, use \` for splitting commands when using Windows PowerShell, for CMD or CMD-kinds use `^` and for bash/linux like command terminales you might want to try `\`.
@@ -754,6 +754,135 @@ start /B python ./main.py ^
   > ./logs/physicsformer_test.log 2>&1
 ```
 
+<br><br>
+
+**Ray-Tracing Test**
+
+Linux:
+```bash
+nohub python ./main.py \
+  --mode train \
+  --epochs 120 \
+  --batch_size 12 \
+  --lr 0.0001 \
+  --loss weighted_combined \
+  --wc_loss_silog_lambda 0.5 \
+  --wc_loss_weight_silog 1.0 \
+  --wc_loss_weight_grad 40.0 \
+  --wc_loss_weight_ssim 80.0 \
+  --wc_loss_weight_edge_aware 40.0 \
+  --wc_loss_weight_l1 8.0 \
+  --wc_loss_weight_var 0.0 \
+  --wc_loss_weight_range 0.0 \
+  --wc_loss_weight_blur 0.0 \
+  --optimizer adam \
+  --optimizer_2 adamw \
+  --weight_decay \
+  --weight_decay_rate 0.0004 \
+  --gradient_clipping \
+  --gradient_clipping_threshold 0.5 \
+  --scheduler step \
+  --scheduler_2 step \
+  --activate_amp \
+  --amp_scaler grad \
+  --checkpoint_save_dir ./checkpoints \
+  --save_only_best_model \
+  --validation_interval 5 \
+  --model residual_design_model \
+  --base_model pix2pix \
+  --complex_model pix2pix \
+  --combine_mode nn \
+  --loss_2 weighted_combined \
+  --wc_loss_silog_lambda_2 0.5 \
+  --wc_loss_weight_silog_2 1.0 \
+  --wc_loss_weight_grad_2 60.0 \
+  --wc_loss_weight_ssim_2 30.0 \
+  --wc_loss_weight_edge_aware_2 60.0 \
+  --wc_loss_weight_l1_2 6.0 \
+  --pix2pix_in_channels 1 \
+  --pix2pix_hidden_channels 64 \
+  --pix2pix_out_channels 1 \
+  --pix2pix_second_loss_lambda 100 \
+  --pix2pix_2_in_channels 2 \
+  --pix2pix_2_hidden_channels 64 \
+  --pix2pix_2_out_channels 1 \
+  --pix2pix_2_second_loss_lambda 100 \
+  --data_variation sound_reflection \
+  --input_type osm \
+  --output_type standard \
+  --reflexion_channels \
+  --reflexion_steps 36 \
+  --device cuda \
+  --experiment_name image-to-image \
+  --run_name raytracing_test \
+  --tensorboard_path ./tensorboard \
+  --save_path ./mlflow_images \
+  --cmap gray \
+  > ./logs/raytracing_test.log 2>&1 &
+```
+
+Windows:
+```bash
+start /B python ./main.py ^
+  --mode train ^
+  --epochs 120 ^
+  --batch_size 12 ^
+  --lr 0.0001 ^
+  --loss weighted_combined ^
+  --wc_loss_silog_lambda 0.5 ^
+  --wc_loss_weight_silog 1.0 ^
+  --wc_loss_weight_grad 40.0 ^
+  --wc_loss_weight_ssim 80.0 ^
+  --wc_loss_weight_edge_aware 40.0 ^
+  --wc_loss_weight_l1 8.0 ^
+  --wc_loss_weight_var 0.0 ^
+  --wc_loss_weight_range 0.0 ^
+  --wc_loss_weight_blur 0.0 ^
+  --optimizer adam ^
+  --optimizer_2 adamw ^
+  --weight_decay ^
+  --weight_decay_rate 0.0004 ^
+  --gradient_clipping ^
+  --gradient_clipping_threshold 0.5 ^
+  --scheduler step ^
+  --scheduler_2 step ^
+  --activate_amp ^
+  --amp_scaler grad ^
+  --checkpoint_save_dir ./checkpoints ^
+  --save_only_best_model ^
+  --validation_interval 5 ^
+  --model residual_design_model ^
+  --base_model pix2pix ^
+  --complex_model pix2pix ^
+  --combine_mode nn ^
+  --loss_2 weighted_combined ^
+  --wc_loss_silog_lambda_2 0.5 ^
+  --wc_loss_weight_silog_2 1.0 ^
+  --wc_loss_weight_grad_2 60.0 ^
+  --wc_loss_weight_ssim_2 30.0 ^
+  --wc_loss_weight_edge_aware_2 60.0 ^
+  --wc_loss_weight_l1_2 6.0 ^
+  --pix2pix_in_channels 1 ^
+  --pix2pix_hidden_channels 64 ^
+  --pix2pix_out_channels 1 ^
+  --pix2pix_second_loss_lambda 100 ^
+  --pix2pix_2_in_channels 2 ^
+  --pix2pix_2_hidden_channels 64 ^
+  --pix2pix_2_out_channels 1 ^
+  --pix2pix_2_second_loss_lambda 100 ^
+  --data_variation sound_reflection ^
+  --input_type osm ^
+  --output_type standard ^
+  --reflexion_channels ^
+  --reflexion_steps 36 ^
+  --device cuda ^
+  --experiment_name image-to-image ^
+  --run_name raytracing_test ^
+  --tensorboard_path ./tensorboard ^
+  --save_path ./mlflow_images ^
+  --cmap gray ^
+  > ./logs/raytracing_test.log 2>&1 &
+```
 
 
 <br>
