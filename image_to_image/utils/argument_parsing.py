@@ -135,7 +135,7 @@ def get_arg_parser():
     parser.add_argument('--warm_up_start_lr', type=float, default=0.00005, help='Warm-Up Start learning rate will end at the lr.')
     parser.add_argument('--warm_up_step_duration', type=int, default=1000, help='Duration of increasing learning rate in steps (one step = one batch process).')
     parser.add_argument('--activate_amp', action="store_true", help='Activates (Automatically) Mixed Precision and use scaler to loose no details because of the smaller float.')
-    parser.add_argument('--amp_scaler', type=str, default=None, choices=[None, 'grad'],
+    parser.add_argument('--amp_scaler', type=str, default='none', choices=['none', 'grad'],
                         help='Decides whichscaler should be used-')
 
     # Inference

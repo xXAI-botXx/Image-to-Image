@@ -61,6 +61,7 @@ from ..models.transformer import PhysicFormer
 
 from ..losses.weighted_combined_loss import WeightedCombinedLoss
 from ..scheduler.warm_up import WarmUpScheduler
+from..amp.dummy_scaler import DummyScaler
 
 
 
@@ -694,6 +695,8 @@ def train(args=None):
     # AMP Scaler
     if args.activate_amp == False:
         amp_scaler = None
+    elif args.amp_scaler.lower() == "none":
+        amp_scaler = DummyScaler()
     elif args.amp_scaler.lower() == "grad":
         amp_scaler = GradScaler()
     else:
