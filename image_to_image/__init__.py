@@ -80,5 +80,5 @@ open_notebook_folder()
 """
 from . import model_interactions
 from . import utils
-from . import main
+from .main import main
 from .utils.package import open_notebook_folder

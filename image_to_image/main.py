@@ -14,6 +14,8 @@ import warnings
 # warnings.filterwarnings("ignore", category=UserWarning, module="pygame")
 warnings.filterwarnings("ignore", category=UserWarning)
 
+from .utils import parse_args
+from .model_interactions import train, inference, test
 
 
 # ---------------------------
@@ -32,9 +34,6 @@ def main():
     Raises:
     - ValueError: if the provided mode is unknown.
     """
-    from .utils import parse_args
-    from .model_interactions import train, inference, test
-
     args = parse_args()
 
     print(f"Running in mode: {args.mode}")

@@ -28,36 +28,17 @@ Content:
 ---
 ### Installation
 
-There are different ways to use this package:
-1. Clone/Download the repo and use it then:
-    ```bash
-    conda create -n img-to-img python=3.13 pip -y
-    conda activate img-to-img
-    pip install --no-cache-dir -r requirements.txt
-    ```
-    For a GPU version you can run this afterwards:
-    ```bash
-    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126
-    ```
-2. Install this package from PyPI:
-    ```bash
-    conda create -n img-to-img python=3.13 pip -y
-    conda activate img-to-img
-    pip install --no-cache-dir image-to-image
-    ```
-    Or with gpu:
-    ```bash
-    conda create -n img-to-img python=3.13 pip -y
-    conda activate img-to-img
-    pip install --no-cache-dir image-to-image[gpu]
-    ```
-    Or:
-    ```bash
-    conda create -n img-to-img python=3.13 pip -y
-    conda activate img-to-img
-    pip install --no-cache-dir image-to-image
-    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126
-    ```
+Clone/Download the repo and use it then:
+
+  ```bash
+  conda create -n img-to-img python=3.13 pip -y
+  conda activate img-to-img
+  pip install --no-cache-dir -r requirements.txt
+  ```
+  For a GPU version you can run this afterwards:
+  ```bash
+  pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126
+  ```
 
 > Use your CUDA version needed. You may want to check with `nvidia-smi`.
 
@@ -180,7 +161,7 @@ There are different ways to use this package:
 
 > When pasting multiline commands on windows, use \` for splitting commands when using Windows PowerShell, for CMD or CMD-kinds use `^` and for bash/linux like command terminales you might want to try `\`.
 
-> [IMPORTANT] if you installed it as python package, then run it as: `python -m image_to_image.main`
+> See also the [Google Coolab notebook](./google_coolab.ipynb).
 
 <br>
 <br>
