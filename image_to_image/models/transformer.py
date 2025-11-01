@@ -16,6 +16,7 @@ By Tobia Ippolito
 # ---------------------------
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 
@@ -151,6 +152,8 @@ class Attention(nn.Module):
         """
         Forward pass of Attention Layer.
 
+        softmax(QK^T)V
+
         Parameter:
         - x (torch.tensor): 
             Patch Embedded Image(s) with positional encoding added.
@@ -166,9 +169,15 @@ class Attention(nn.Module):
         q, k, v = qkv.unbind(dim=0)
 
         # compute scaled dot-product
-        attention_scores = (q@k.transpose(-2, -1)) * self.scale  # (batch_size, num_heads, num_patches, num_patches)
-        attention_weights = attention_scores.softmax(dim=-1)
-        attention_output = (attention_weights@v).reshape(batch_size, num_patches, embedded_dim)
+        # attention_scores = (q@k.transpose(-2, -1)) * self.scale  # (batch_size, num_heads, num_patches, num_patches)
+        # attention_weights = attention_scores.softmax(dim=-1)
+        # attention_output = (attention_weights@v).reshape(batch_size, num_patches, embedded_dim)
+
+        # -> Memory-efficient attention score version (uses flash-attention when available)
+        attention_output = F.scaled_dot_product_attention(q, k, v, dropout_p=0.0)
+        attention_output = attention_output.transpose(1, 2).reshape(
+            batch_size, num_patches, embedded_dim
+        )
 
         return self.fc(attention_output)
 

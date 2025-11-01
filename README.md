@@ -692,7 +692,7 @@ Windows:
 start /B python ./main.py ^
   --mode train ^
   --epochs 50 ^
-  --batch_size 1 ^
+  --batch_size 16 ^
   --lr 0.001 ^
   --loss weighted_combined ^
   --wc_loss_silog_lambda 0.5 ^
@@ -722,7 +722,7 @@ start /B python ./main.py ^
   --physicsformer_in_channels 1 ^
   --physicsformer_out_channels 1 ^
   --physicsformer_img_size 256 ^
-  --physicsformer_patch_size 4 ^
+  --physicsformer_patch_size 8 ^
   --physicsformer_embedded_dim 1024 ^
   --physicsformer_num_blocks 8 ^
   --physicsformer_heads 16 ^
