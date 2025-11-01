@@ -180,6 +180,8 @@ There are different ways to use this package:
 
 > When pasting multiline commands on windows, use \` for splitting commands when using Windows PowerShell, for CMD or CMD-kinds use `^` and for bash/linux like command terminales you might want to try `\`.
 
+> [IMPORTANT] if you installed it as python package, then run it as: `python -m image_to_image.main`
+
 <br>
 <br>
 

@@ -7,7 +7,7 @@ with open("./README.md", "r") as f:
 
 setup(
     name='image-to-image',
-    version='0.3',
+    version='0.4',
     packages=['image_to_image'],# find_packages(),
     install_requires=[
         # List any dependencies here, e.g. 'numpy', 'requests'
