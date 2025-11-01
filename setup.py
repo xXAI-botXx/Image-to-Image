@@ -7,7 +7,7 @@ with open("./README.md", "r") as f:
 
 setup(
     name='image-to-image',
-    version='0.2',
+    version='0.3',
     packages=['image_to_image'],# find_packages(),
     install_requires=[
         # List any dependencies here, e.g. 'numpy', 'requests'
@@ -46,7 +46,7 @@ setup(
     long_description = readme,
     long_description_content_type="text/markdown",
     include_package_data=True,  # Ensures files from MANIFEST.in are included
-    download_url = 'https://github.com/xXAI-botXx/Image-to-Image/archive/v_01.tar.gz',
+    download_url = 'https://github.com/xXAI-botXx/Image-to-Image/archive/v_02.tar.gz',
     url="https://github.com/xXAI-botXx/Image-to-Image",
     project_urls={
         "Documentation": "https://xxai-botxx.github.io/Image-to-Image/image_to_image",
