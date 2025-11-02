@@ -40,6 +40,8 @@ from torch.utils.data import DataLoader
 from torch.amp import autocast, GradScaler
 import torchvision
 
+from lion_pytorch import Lion
+
 # Experiment tracking
 import mlflow
 import mlflow.pytorch
@@ -177,10 +179,14 @@ def get_optimizer(optimizer_name, model, lr, args):
 
     weight_decay_rate = args.weight_decay_rate if args.weight_decay else 0
 
-    if args.optimizer.lower() == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=lr,  betas=(0.5, 0.999), weight_decay=weight_decay_rate)
-    elif args.optimizer.lower() == "adamw":
-        optimizer = optim.AdamW(model.parameters(), lr=lr,  betas=(0.5, 0.999), weight_decay=weight_decay_rate)
+    if optimizer_name == "adam":
+        optimizer = optim.Adam(model.parameters(), lr=lr,  betas=(0.9, 0.95), weight_decay=weight_decay_rate)
+    elif optimizer_name == "adamw":
+        optimizer = optim.AdamW(model.parameters(), lr=lr,  betas=(0.9, 0.95), weight_decay=weight_decay_rate)
+    elif optimizer_name == "radam":
+        optimizer = optim.RAdam(model.parameters(), lr=lr,  weight_decay=weight_decay_rate)
+    elif optimizer_name == "lion":
+        optimizer = Lion(model.parameters(), lr=lr,  weight_decay=weight_decay_rate)
     else:
         raise ValueError(f"'{optimizer_name}' is not a supported optimizer.")
     

@@ -119,9 +119,9 @@ def get_arg_parser():
     parser.add_argument('--wc_loss_weight_range', type=float, default=1.0, help='Weight for range loss.')
     parser.add_argument('--wc_loss_weight_blur', type=float, default=1.0, help='Weight for blur loss.')
 
-    parser.add_argument('--optimizer', type=str, default="adam", choices=['adam', 'adamw'],
+    parser.add_argument('--optimizer', type=str, default="adam", choices=['adam', 'adamw', 'radam', 'lion'],
                         help='Optimizer, which decides how exactly to calculate the loss and weight gradients.')
-    parser.add_argument('--optimizer_2', type=str, default="adam", choices=['adam', 'adamw'],
+    parser.add_argument('--optimizer_2', type=str, default="adam", choices=['adam', 'adamw', 'radam', 'lion'],
                         help='Optimizer, which decides how exactly to calculate the loss and weight gradients -> for the second model(-part).\nFor example for the discriminator part of pix2pix model or the complex part in the residual design model.')
     parser.add_argument('--weight_decay', action="store_true", help='Whether or not to use weight decay (keeping weights smaller).')
     parser.add_argument('--weight_decay_rate', type=float, default=0.0005, help='Coefficient of weight decay -> weighting of the penalty.')
