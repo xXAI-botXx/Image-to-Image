@@ -234,14 +234,12 @@ class TransformerEncoderBlock(nn.Module):
             The attention cores passed through fully connected layer and a multilayer perceptron with layer normalization.
         """
         # self attention with skip connection
-        x = self.norm_1(x)
-        x = x + self.attention(x)
+        y = x + self.attention(self.norm_1(x))
 
         # MLP with skip connection
-        x = self.norm_2(x)
-        x = x + self.mlp(x)
+        y = y + self.mlp(self.norm_2(y))
 
-        return x
+        return y
 
 
 
@@ -343,7 +341,8 @@ class PhysicFormer(nn.Module):
     def __init__(self, input_channels=1, output_channels=1, 
                  img_size=256, patch_size=4, 
                  embedded_dim=1026, num_blocks=8,
-                 heads=16, mlp_dim=2048, dropout=0.1):
+                 heads=16, mlp_dim=2048, dropout=0.1,
+                 is_train=False):
         """
         Init of the PhysicFormer model.
 
@@ -369,6 +368,7 @@ class PhysicFormer(nn.Module):
             Dropout probability for regularization applied after positional encoding and inside MLP.
         """
         super().__init__()
+        self.is_train = is_train
         self.input_channels = input_channels
         self.output_channels = output_channels
         self.patch_size = patch_size
@@ -394,7 +394,7 @@ class PhysicFormer(nn.Module):
 
         self.norm = nn.LayerNorm(embedded_dim)
 
-        self.refinement = CNNRefinement(input_channels=output_channels, hidden_channels=64, output_channels=output_channels, skip_connection=True)
+        self.refinement = CNNRefinement(input_channels=output_channels, hidden_channels=64, output_channels=output_channels, skip_connection=False)
 
 
     def get_input_channels(self):
@@ -467,6 +467,9 @@ class PhysicFormer(nn.Module):
         # # Combine contributions (global + local + input)
         # x = x + refined + x_input
 
-        return torch.sigmoid(x)  # between 0.0 and 1.0 -> alt: torch.clamp(x, 0.0, 1.0)
+        if self.is_train:
+            return x  # torch.sigmoid(x)  # between 0.0 and 1.0 -> alt: torch.clamp(x, 0.0, 1.0)
+        else:
+            return torch.clamp(x, 0.0, 1.0)
 
 

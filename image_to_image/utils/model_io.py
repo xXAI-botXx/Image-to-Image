@@ -141,7 +141,8 @@ def get_single_model(model_name, args, criterion, device):
                              num_blocks=args.physicsformer_num_blocks,
                              heads=args.physicsformer_heads, 
                              mlp_dim=args.physicsformer_mlp_dim, 
-                             dropout=args.physicsformer_dropout).to(device)
+                             dropout=args.physicsformer_dropout,
+                             is_train=True if args.mode == "train" else False).to(device)
     elif model_name == "physicsformer_2":
         model = PhysicFormer(input_channels=args.physicsformer_in_channels_2, 
                              output_channels=args.physicsformer_out_channels_2, 
@@ -151,7 +152,8 @@ def get_single_model(model_name, args, criterion, device):
                              num_blocks=args.physicsformer_num_blocks_2,
                              heads=args.physicsformer_heads_2, 
                              mlp_dim=args.physicsformer_mlp_dim_2, 
-                             dropout=args.physicsformer_dropout_2).to(device)
+                             dropout=args.physicsformer_dropout_2,
+                             is_train=True if args.mode == "train" else False).to(device)
     else:
         raise ValueError(f"'{model_name}' is not a supported model.")
 
