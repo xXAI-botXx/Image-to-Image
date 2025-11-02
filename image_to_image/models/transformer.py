@@ -183,9 +183,9 @@ class Attention(nn.Module):
 
 
 
-# ---------------------------
+# -----------------------------
 # > Transformer Encoder Block <
-# ---------------------------
+# -----------------------------
 class TransformerEncoderBlock(nn.Module):
     """
     A Transformer Encoder Block consists of self-attention layer 
@@ -240,6 +240,39 @@ class TransformerEncoderBlock(nn.Module):
         y = y + self.mlp(self.norm_2(y))
 
         return y
+
+
+
+# -----------------------------
+# > Transformer Decoder Block <
+# -----------------------------
+class TransformerDecoderBlock(nn.Module):
+    def __init__(self, embedded_dim, num_heads, mlp_dim, dropout=0.1):
+        super().__init__()
+        self.norm_1 = nn.LayerNorm(embedded_dim)
+        self.attention = Attention(embedded_dim, num_heads)
+
+        self.norm_2 = nn.LayerNorm(embedded_dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(embedded_dim, mlp_dim),
+            nn.GELU(),
+            nn.Linear(mlp_dim, embedded_dim),
+            nn.Dropout(dropout)
+        )
+
+        self.skip_proj = nn.Linear(embedded_dim, embedded_dim)
+
+    def forward(self, x, skip):
+        # add skip from encoder
+        skip = self.skip_proj(skip)
+        x = x + skip
+
+        # self-attention
+        x = x + self.attention(self.norm_1(x))
+
+        # feed-forward
+        x = x + self.mlp(self.norm_2(x))
+        return x
 
 
 
@@ -386,7 +419,12 @@ class PhysicFormer(nn.Module):
         blocks = []
         for _ in range(num_blocks):
             blocks += [TransformerEncoderBlock(embedded_dim=embedded_dim, num_heads=heads, mlp_dim=mlp_dim, dropout=dropout)]
-        self.transformer_blocks = nn.ModuleList(blocks)
+        self.transformer_encoder_blocks = nn.ModuleList(blocks)
+
+        blocks = []
+        for _ in range(num_blocks):
+            blocks += [TransformerDecoderBlock(embedded_dim=embedded_dim, num_heads=heads, mlp_dim=mlp_dim, dropout=dropout)]
+        self.transformer_decoder_blocks = nn.ModuleList(blocks)
 
         self.to_img = nn.Sequential(
             nn.Linear(embedded_dim, patch_size*patch_size*output_channels)
@@ -446,8 +484,13 @@ class PhysicFormer(nn.Module):
         x = self.dropout(x)
         
         # transformer blocks
-        for transformer_block in self.transformer_blocks:
-            x = transformer_block(x)
+        skips = []
+        for encoder_block in self.transformer_encoder_blocks:
+            x = encoder_block(x)
+            skips += [x]
+
+        for decoder_block, skip in zip(self.transformer_decoder_blocks, reversed(skips)):
+            x = decoder_block(x, skip)
 
         x = self.norm(x)
 
@@ -459,7 +502,7 @@ class PhysicFormer(nn.Module):
         # when you call .view() right after .transpose(), PyTorch can’t reinterpret the data layout -> this is an error.
 
         # refinement
-        x = self.refinement(x, original=x_input)
+        # x = self.refinement(x, original=x_input)
 
         # Other version:
         # refined = self.refinement(x)
