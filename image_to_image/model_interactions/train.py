@@ -661,6 +661,7 @@ def train(args=None):
 
     print("\nChecking your Hardware:")
     print(prime.get_hardware())
+    print("\n\n")
 
     # Parse arguments
     if args is None:
@@ -801,6 +802,8 @@ def train(args=None):
 
         params_text = "\n".join([f"{k}: {v}" for k, v in params.items()])
         writer.add_text("hyperparameters", params_text, 0)
+                                                
+        print("\n---------------------------\n     - RUN SETTINGS -\n"+params_text+"\n---------------------------\n\n")
 
         print(f"Train dataset size: {len(train_dataset)} | Validation dataset size: {len(val_dataset)}")
         mlflow.log_metrics({

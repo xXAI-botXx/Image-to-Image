@@ -181,13 +181,16 @@ def get_single_model(model_name, args, criterion, device):
     else:
         raise ValueError(f"'{model_name}' is not a supported model.")
 
-    print("\nModel Information:\n")
-    if isinstance(model, UViT):
-        model_stats = summary(model, input_size=(1, input_channels, 256, 256), dummy_pass=True, verbose=0)
-    else:
-        model_stats = summary(model, input_size=(1, input_channels, 256, 256), verbose=0)
-    sys.stdout.flush()
-    sys.stdout.buffer.write(str(model_stats).encode('utf-8', errors='replace') + b'\n')
+    print("\n\nModel Information:\n")
+    try:
+        if isinstance(model, UViT):
+            model_stats = summary(model, input_size=(1, input_channels, 256, 256), dummy_pass=True, verbose=0)
+        else:
+            model_stats = summary(model, input_size=(1, input_channels, 256, 256), verbose=0)
+        sys.stdout.flush()
+        sys.stdout.buffer.write(str(model_stats).encode('utf-8', errors='replace') + b'\n')
+    except Exception as e:
+        print(f"Got error during summarize your model:\n{e}")
     print("\n")
 
     return model

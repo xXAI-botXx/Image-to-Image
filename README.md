@@ -76,8 +76,8 @@ Processor: AMD64 Family 23 Model 113 Stepping 0, AuthenticAMD
     ---> GPU <---
 GPU Name: NVIDIA GeForce RTX 4060
 VRAM Total: 8188 MB
-VRAM Used: 1039 MB
-Utilization: 0.0 %
+VRAM Used: 1077 MB
+Utilization: 10.0 %
 PyTorch Support: True (NVIDIA GeForce RTX 4060)
 TensorFlow Support: False -> not installed
 
@@ -86,16 +86,19 @@ CPU-Name: AMD Ryzen 7 3700X 8-Core Processor
 CPU Kernels: 8
 Logical CPU-Kernels: 16
 CPU-Frequence: 3600 MHz
-CPU-Utilization: 8.6 %
+CPU-Utilization: 1.8 %
 
     ---> RAM <---
 RAM Total: 31 GB
-RAM Available: 19 GB
-RAM-Utilization: 38.6 %
+RAM Available: 18 GB
+RAM-Utilization: 43.2 %
 
 --------------------------------
+
+
 PhysGen (sound_reflection) Dataset for train got created
 PhysGen (sound_reflection) Dataset for validation got created
+
 
 Model Information:
 
@@ -146,6 +149,109 @@ Forward/backward pass size (MB): 643.70
 Params size (MB): 405.28
 Estimated Total Size (MB): 1049.24
 ==========================================================================================
+
+
+
+---------------------------
+     - RUN SETTINGS -
+mode: train
+device: cuda
+epochs: 80
+batch_size: 32
+learning_rate: 0.0001
+loss_function: weighted_combined
+optimizer: adam
+weight_decay: True
+weight_decay_rate: 4e-06
+gradient_clipping: True
+gradient_clipping_threshold: 0.5
+scheduler: cosine
+use_warm_up: True
+warm_up_start_lr: 5e-06
+warm_up_step_duration: 2000
+use_amp: True
+amp_scaler: grad
+save_only_best_model: True
+wc_loss_silog_lambda: 0.5
+wc_loss_weight_silog: 0.0
+wc_loss_weight_grad: 0.0
+wc_loss_weight_ssim: 10.0
+wc_loss_weight_edge_aware: 0.0
+wc_loss_weight_l1: 100.0
+wc_loss_weight_var: 0.0
+wc_loss_weight_range: 0.0
+wc_loss_weight_blur: 10.0
+model: uvit
+n_model_params: 101516711
+resfcn_in_channels: 1
+resfcn_hidden_channels: 64
+resfcn_out_channels: 1
+resfcn_num_blocks: 16
+pix2pix_in_channels: 1
+pix2pix_hidden_channels: 64
+pix2pix_out_channels: 1
+pix2pix_second_loss_lambda: 100.0
+physicsformer_in_channels: 1
+physicsformer_out_channels: 1
+physicsformer_img_size: 256
+physicsformer_patch_size: 4
+physicsformer_embedded_dim: 1024
+physicsformer_num_blocks: 8
+physicsformer_heads: 16
+physicsformer_mlp_dim: 2048
+physicsformer_dropout: 0.1
+uvit_in_channels: 1
+uvit_hidden_channels: 768
+uvit_out_channels: 1
+uvit_image_size: 256
+uvit_timesteps: 500
+data_variation: sound_reflection
+input_type: osm
+output_type: standard
+fake_rgb_output: False
+make_14_dividable_size: False
+experiment_name: image-to-image
+run_name: 2025-12-09_11_43_uvit_test
+tensorboard_path: ./tensorboard
+save_path: ./mlflow_images
+checkpoint_save_dir: ./checkpoints\image-to-image\2025-12-09_11_43_uvit_test
+cmap: gray
+base_model: pix2pix
+complex_model: pix2pix
+combine_mode: nn
+loss_2: l1
+wc_loss_silog_lambda_2: 0.5
+wc_loss_weight_silog_2: 0.5
+wc_loss_weight_grad_2: 10.0
+wc_loss_weight_ssim_2: 5.0
+wc_loss_weight_edge_aware_2: 10.0
+wc_loss_weight_l1_2: 1.0
+wc_loss_weight_var_2: 1.0
+wc_loss_weight_range_2: 1.0
+wc_loss_weight_blur_2: 1.0
+resfcn_2_in_channels: 1
+resfcn_2_hidden_channels: 64
+resfcn_2_out_channels: 1
+resfcn_2_num_blocks: 16
+pix2pix_2_in_channels: 1
+pix2pix_2_hidden_channels: 64
+pix2pix_2_out_channels: 1
+pix2pix_2_second_loss_lambda: 100.0
+physicsformer_in_channels_2: 1
+physicsformer_out_channels_2: 1
+physicsformer_img_size_2: 256
+physicsformer_patch_size_2: 4
+physicsformer_embedded_dim_2: 1026
+physicsformer_num_blocks_2: 8
+physicsformer_heads_2: 16
+physicsformer_mlp_dim_2: 2048
+physicsformer_dropout_2: 0.1
+uvit_2_in_channels: 1
+uvit_2_hidden_channels: 64
+uvit_2_out_channels: 1
+uvit_2_image_size: 256
+uvit_2_timesteps: 1000
+---------------------------
 
 
 Train dataset size: 19908 | Validation dataset size: 3732
@@ -1045,7 +1151,6 @@ start /B python ./main.py ^
   > ./logs/uvit_test.log 2>&1 &
 ```
 
-taskkill /IM python.exe /F
 
 
 <br>
