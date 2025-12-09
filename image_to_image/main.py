@@ -12,7 +12,10 @@ By Tobia Ippolito
 # ---------------------------
 import warnings
 # warnings.filterwarnings("ignore", category=UserWarning, module="pygame")
+warnings.filterwarnings("ignore", category=UserWarning, module="pygame.pkgdata")
 warnings.filterwarnings("ignore", category=UserWarning)
+import torch
+warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
 
 from .utils import parse_args
 from .model_interactions import train, inference, test

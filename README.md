@@ -9,6 +9,7 @@ Data References:
 
 Content:
 - [Installation](#installation)
+- [Example Bash Output](#example-bash-output)
 - [Process](#process)
 - [Example Commands](#example-commands)
 - [Experiment Commands](#experiment-commands)
@@ -41,6 +42,126 @@ Clone/Download the repo and use it then:
   ```
 
 > Use your CUDA version needed. You may want to check with `nvidia-smi`.
+
+
+```bash
+git clone https://github.com/xXAI-botXx/Physics-U-ViT.git physics_u_vit
+```
+
+
+<br>
+<br>
+
+---
+### Example Bash Output
+
+```text
+attention mode is flash
+Running in mode: train
+Using device: cuda
+
+---> Welcome to Image-to-Image Training <---
+
+Checking your Hardware:
+
+-------------------------------- 
+Your Hardware:
+
+    ---> General <---
+Operatingsystem: Windows
+Version: 10.0.26200
+Architecture: ('64bit', 'WindowsPE')
+Processor: AMD64 Family 23 Model 113 Stepping 0, AuthenticAMD
+
+    ---> GPU <---
+GPU Name: NVIDIA GeForce RTX 4060
+VRAM Total: 8188 MB
+VRAM Used: 1039 MB
+Utilization: 0.0 %
+PyTorch Support: True (NVIDIA GeForce RTX 4060)
+TensorFlow Support: False -> not installed
+
+    ---> CPU <---
+CPU-Name: AMD Ryzen 7 3700X 8-Core Processor
+CPU Kernels: 8
+Logical CPU-Kernels: 16
+CPU-Frequence: 3600 MHz
+CPU-Utilization: 8.6 %
+
+    ---> RAM <---
+RAM Total: 31 GB
+RAM Available: 19 GB
+RAM-Utilization: 38.6 %
+
+--------------------------------
+PhysGen (sound_reflection) Dataset for train got created
+PhysGen (sound_reflection) Dataset for validation got created
+
+Model Information:
+
+==========================================================================================
+Layer (type:depth-idx)                   Output Shape              Param #
+==========================================================================================
+UViT                                     [1, 1, 256, 256]          --
+├─UViT: 1-1                              [1, 2, 256, 256]          197,376
+│    └─PatchEmbed: 2-1                   [1, 256, 768]             --
+│    │    └─Conv2d: 3-1                  [1, 768, 16, 16]          393,984
+│    └─Identity: 2-2                     [1, 768]                  --
+│    └─ModuleList: 2-3                   --                        --
+│    │    └─Block: 3-2                   [1, 257, 768]             7,085,568
+│    │    └─Block: 3-3                   [1, 257, 768]             7,085,568
+│    │    └─Block: 3-4                   [1, 257, 768]             7,085,568
+│    │    └─Block: 3-5                   [1, 257, 768]             7,085,568
+│    │    └─Block: 3-6                   [1, 257, 768]             7,085,568
+│    │    └─Block: 3-7                   [1, 257, 768]             7,085,568
+│    └─Block: 2-4                        [1, 257, 768]             --
+│    │    └─LayerNorm: 3-8               [1, 257, 768]             1,536
+│    │    └─Attention: 3-9               [1, 257, 768]             2,360,064
+│    │    └─LayerNorm: 3-10              [1, 257, 768]             1,536
+│    │    └─Mlp: 3-11                    [1, 257, 768]             4,722,432
+│    └─ModuleList: 2-5                   --                        --
+│    │    └─Block: 3-12                  [1, 257, 768]             8,265,984
+│    │    └─Block: 3-13                  [1, 257, 768]             8,265,984
+│    │    └─Block: 3-14                  [1, 257, 768]             8,265,984
+│    │    └─Block: 3-15                  [1, 257, 768]             8,265,984
+│    │    └─Block: 3-16                  [1, 257, 768]             8,265,984
+│    │    └─Block: 3-17                  [1, 257, 768]             8,265,984
+│    └─LayerNorm: 2-6                    [1, 257, 768]             1,536
+│    └─Linear: 2-7                       [1, 257, 512]             393,728
+│    └─Conv2d: 2-8                       [1, 2, 256, 256]          38
+├─Sequential: 1-2                        [1, 1, 256, 256]          --
+│    └─Conv2d: 2-9                       [1, 384, 256, 256]        7,296
+│    └─GELU: 2-10                        [1, 384, 256, 256]        --
+│    └─Conv2d: 2-11                      [1, 384, 256, 256]        1,327,488
+│    └─GELU: 2-12                        [1, 384, 256, 256]        --
+│    └─Conv2d: 2-13                      [1, 1, 256, 256]          385
+==========================================================================================
+Total params: 101,516,711
+Trainable params: 101,516,711
+Non-trainable params: 0
+Total mult-adds (Units.GIGABYTES): 87.70
+==========================================================================================
+Input size (MB): 0.26
+Forward/backward pass size (MB): 643.70
+Params size (MB): 405.28
+Estimated Total Size (MB): 1049.24
+==========================================================================================
+
+
+Train dataset size: 19908 | Validation dataset size: 3732
+
+Epochs:   0%|          | 0/80 [00:00<?, ?it/s]
+Epochs:   0%|          | 0/80 [06:24<?, ?it/s, time_needed=384.01s, train_loss=27.6568, val_loss=N/A]
+Epochs:   1%|1         | 1/80 [06:24<8:25:40, 384.06s/it, time_needed=384.01s, train_loss=27.6568, val_loss=N/A]
+Epochs:   1%|1         | 1/80 [12:43<8:25:40, 384.06s/it, time_needed=379.94s, train_loss=16.3446, val_loss=N/A]
+Epochs:   2%|2         | 2/80 [12:44<8:16:08, 381.65s/it, time_needed=379.94s, train_loss=16.3446, val_loss=N/A]
+Epochs:   2%|2         | 2/80 [18:53<8:16:08, 381.65s/it, time_needed=369.71s, train_loss=11.1381, val_loss=N/A]
+Epochs:   4%|3         | 3/80 [18:53<8:02:48, 376.21s/it, time_needed=369.71s, train_loss=11.1381, val_loss=N/A]
+Epochs:   4%|3         | 3/80 [25:02<8:02:48, 376.21s/it, time_needed=368.78s, train_loss=9.3323, val_loss=N/A] 
+Epochs:   5%|5         | 4/80 [25:02<7:52:49, 373.28s/it, time_needed=368.78s, train_loss=9.3323, val_loss=N/A]
+Epochs:   5%|5         | 4/80 [31:53<7:52:49, 373.28s/it, time_needed=366.22s, train_loss=9.1186, val_loss=8.3822]
+Epochs:   6%|6         | 5/80 [32:07<8:09:48, 391.85s/it, time_needed=366.22s, train_loss=9.1186, val_loss=8.3822]
+```
 
 
 
@@ -869,6 +990,62 @@ start /B python ./main.py ^
   --cmap gray ^
   > ./logs/raytracing_test.log 2>&1 &
 ```
+
+<br><br>
+
+**U-ViT Test**
+
+
+Windows:
+```bash
+start /B python ./main.py ^
+  --mode train ^
+  --epochs 80 ^
+  --batch_size 32 ^
+  --lr 0.0001 ^
+  --loss weighted_combined ^
+  --wc_loss_silog_lambda 0.5 ^
+  --wc_loss_weight_silog 0.0 ^
+  --wc_loss_weight_grad 0.0 ^
+  --wc_loss_weight_ssim 10.0 ^
+  --wc_loss_weight_edge_aware 0.0 ^
+  --wc_loss_weight_l1 100.0 ^
+  --wc_loss_weight_var 0.0 ^
+  --wc_loss_weight_range 0.0 ^
+  --wc_loss_weight_blur 10.0 ^
+  --optimizer adam ^
+  --weight_decay ^
+  --weight_decay_rate 0.000004 ^
+  --gradient_clipping ^
+  --gradient_clipping_threshold 0.5 ^
+  --scheduler cosine ^
+  --use_warm_up ^
+  --warm_up_start_lr 0.000005 ^
+  --warm_up_step_duration 2000 ^
+  --activate_amp ^
+  --amp_scaler grad ^
+  --checkpoint_save_dir ./checkpoints ^
+  --save_only_best_model ^
+  --validation_interval 3 ^
+  --model uvit ^
+  --uvit_in_channels 1 ^
+  --uvit_hidden_channels 768 ^
+  --uvit_out_channels 1 ^
+  --uvit_image_size 256 ^
+  --uvit_timesteps 500 ^
+  --data_variation sound_reflection ^
+  --input_type osm ^
+  --output_type standard ^
+  --device cuda ^
+  --experiment_name image-to-image ^
+  --run_name uvit_test ^
+  --tensorboard_path ./tensorboard ^
+  --save_path ./mlflow_images ^
+  --cmap gray ^
+  > ./logs/uvit_test.log 2>&1 &
+```
+
+taskkill /IM python.exe /F
 
 
 <br>

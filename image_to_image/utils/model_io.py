@@ -16,15 +16,19 @@ By Tobia Ippolito
 #        > Imports <
 # ---------------------------
 import os
+import sys
+import io
 
 import torch
 
 import prime_printer as prime
+from torchinfo import summary
 
 from ..models.pix2pix import Pix2Pix
 from ..models.resfcn import ResFCN
 from ..models.residual_design_model import ResidualDesignModel
 from ..models.transformer import PhysicFormer
+from ..models.uvit import UViT
 
 
 
@@ -111,28 +115,33 @@ def get_single_model(model_name, args, criterion, device):
     model_name = model_name.lower()
 
     if model_name== "resfcn":
+        input_channels = args.resfcn_in_channels
         model = ResFCN(input_channels=args.resfcn_in_channels, 
                        hidden_channels=args.resfcn_hidden_channels, 
                        output_channels=args.resfcn_out_channels,
                          num_blocks=args.resfcn_num_blocks).to(device)
     elif model_name == "resfcn_2":
+        input_channels = args.resfcn_2_in_channels
         model = ResFCN(input_channels=args.resfcn_2_in_channels, 
                        hidden_channels=args.resfcn_2_hidden_channels, 
                        output_channels=args.resfcn_2_out_channels, 
                        num_blocks=args.resfcn_2_num_blocks).to(device)
     elif model_name == "pix2pix":
+        input_channels = args.pix2pix_in_channels
         model = Pix2Pix(input_channels=args.pix2pix_in_channels, 
                         output_channels=args.pix2pix_out_channels, 
                         hidden_channels=args.pix2pix_hidden_channels, 
                         second_loss=criterion, 
                         lambda_second=args.pix2pix_second_loss_lambda).to(device)
     elif model_name == "pix2pix_2":
+        input_channels = args.pix2pix_2_in_channels
         model = Pix2Pix(input_channels=args.pix2pix_2_in_channels, 
                         output_channels=args.pix2pix_2_out_channels, 
                         hidden_channels=args.pix2pix_2_hidden_channels, 
                         second_loss=criterion, 
                         lambda_second=args.pix2pix_2_second_loss_lambda).to(device)
     elif model_name == "physicsformer":
+        input_channels = args.physicsformer_in_channels
         model = PhysicFormer(input_channels=args.physicsformer_in_channels, 
                              output_channels=args.physicsformer_out_channels, 
                              img_size=args.physicsformer_img_size, 
@@ -144,6 +153,7 @@ def get_single_model(model_name, args, criterion, device):
                              dropout=args.physicsformer_dropout,
                              is_train=True if args.mode == "train" else False).to(device)
     elif model_name == "physicsformer_2":
+        input_channels = args.physicsformer_in_channels_2
         model = PhysicFormer(input_channels=args.physicsformer_in_channels_2, 
                              output_channels=args.physicsformer_out_channels_2, 
                              img_size=args.physicsformer_img_size_2, 
@@ -154,8 +164,52 @@ def get_single_model(model_name, args, criterion, device):
                              mlp_dim=args.physicsformer_mlp_dim_2, 
                              dropout=args.physicsformer_dropout_2,
                              is_train=True if args.mode == "train" else False).to(device)
+    elif model_name == "uvit":
+        input_channels = args.uvit_in_channels
+        model = UViT(input_channels=args.uvit_in_channels,
+                     hidden_channels=args.uvit_hidden_channels,
+                     output_channels=args.uvit_out_channels,
+                     image_size=args.uvit_image_size,
+                     timesteps=args.uvit_timesteps).to(device)
+    elif model_name == "uvit_2":
+        input_channels = args.uvit_2_in_channels
+        model = UViT(input_channels=args.uvit_2_in_channels,
+                     hidden_channels=args.uvit_2_hidden_channels,
+                     output_channels=args.uvit_2_out_channels,
+                     image_size=args.uvit_2_image_size,
+                     timesteps=args.uvit_2_timesteps).to(device)
     else:
         raise ValueError(f"'{model_name}' is not a supported model.")
+    
+    # print model summary
+    # sys.stdout.reconfigure(encoding='utf-8')
+    # old_stdout = sys.stdout
+    # buffer = io.StringIO()
+    # sys.stdout = io.TextIOWrapper(
+    #     sys.stdout.buffer,
+    #     encoding='utf-8',
+    #     errors='replace',
+    #     line_buffering=True,
+    #     write_through=True
+    # )
+    # try:
+        # # Redirect to UTF-8 buffer temporarily
+        # sys.stdout = buffer
+
+    print("\nModel Information:\n")
+    # buffer = io.StringIO()
+    if isinstance(model, UViT):
+        model_stats = summary(model, input_size=(1, input_channels, 256, 256), dummy_pass=True, verbose=0)
+    else:
+        model_stats = summary(model, input_size=(1, input_channels, 256, 256), verbose=0)
+    # print(str(model_stats).encode('utf-8', errors='replace').decode('utf-8'))
+    sys.stdout.flush()
+    sys.stdout.buffer.write(str(model_stats).encode('utf-8', errors='replace') + b'\n')
+    print("\n")
+    # finally:
+    #     sys.stdout = old_stdout
+
+    # print(buffer.getvalue())
 
     return model
 

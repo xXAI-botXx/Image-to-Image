@@ -144,7 +144,7 @@ def get_arg_parser():
     parser.add_argument('--output_dir', type=str, default='../../data/eval', help='Path to save the real and predicted Images.')
 
     # Model Loading
-    parser.add_argument('--model', type=str, default="resfcn", choices=['resfcn', 'pix2pix', 'residual_design_model', 'physicsformer'],
+    parser.add_argument('--model', type=str, default="resfcn", choices=['resfcn', 'pix2pix', 'residual_design_model', 'physicsformer', 'uvit'],
                         help='Which Model should be choosen')
 
     # ---> ResFCN
@@ -169,6 +169,13 @@ def get_arg_parser():
     parser.add_argument('--physicsformer_heads', type=int, default=16)
     parser.add_argument('--physicsformer_mlp_dim', type=int, default=2048, help='Dimension of MLP.')
     parser.add_argument('--physicsformer_dropout', type=float, default=0.1, help='Dropout rate.')
+
+    # ---> U-ViT
+    parser.add_argument('--uvit_in_channels', type=int, default=1, help='How much channels as input?')
+    parser.add_argument('--uvit_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
+    parser.add_argument('--uvit_out_channels', type=int, default=1, help='How much channels as output?')
+    parser.add_argument('--uvit_image_size', type=int, default=256, help='Size of the image (width or height).')
+    parser.add_argument('--uvit_timesteps', type=int, default=1000, help='Number of timesteps for U-ViT model.')
 
     # ---> Residual Design Model
     parser.add_argument('--base_model', type=str, default="pix2pix", choices=['resfcn', 'pix2pix'],
@@ -213,6 +220,13 @@ def get_arg_parser():
     parser.add_argument('--physicsformer_heads_2', type=int, default=16)
     parser.add_argument('--physicsformer_mlp_dim_2', type=int, default=2048, help='Dimension of MLP.')
     parser.add_argument('--physicsformer_dropout_2', type=float, default=0.1, help='Dropout rate.')
+
+    # ---> U-ViT Model 2
+    parser.add_argument('--uvit_2_in_channels', type=int, default=1, help='How much channels as input?')
+    parser.add_argument('--uvit_2_hidden_channels', type=int, default=64, help='How much channels in the hidden layers?')
+    parser.add_argument('--uvit_2_out_channels', type=int, default=1, help='How much channels as output?')
+    parser.add_argument('--uvit_2_image_size', type=int, default=256, help='Size of the image (width or height).')
+    parser.add_argument('--uvit_2_timesteps', type=int, default=1000, help='Number of timesteps for U-ViT model.')
 
 
     # Data

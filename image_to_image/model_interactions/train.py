@@ -52,6 +52,7 @@ import prime_printer as prime
 
 from ..utils.argument_parsing import parse_args
 from ..utils.model_io import get_model, save_checkpoint
+from ..utils.diffusion import q_sample
 
 from ..data.physgen import PhysGenDataset
 from ..data.residual_physgen import PhysGenResidualDataset, to_device
@@ -60,6 +61,7 @@ from ..models.resfcn import ResFCN
 from ..models.pix2pix import Pix2Pix
 from ..models.residual_design_model import ResidualDesignModel
 from ..models.transformer import PhysicFormer
+from ..models.uvit import UViT
 
 from ..losses.weighted_combined_loss import WeightedCombinedLoss
 from ..scheduler.warm_up import WarmUpScheduler
@@ -284,6 +286,12 @@ def get_params(args, device, n_model_params, current_save_name, checkpoint_save_
             "physicsformer_mlp_dim": args.physicsformer_mlp_dim,
             "physicsformer_dropout": args.physicsformer_dropout,
 
+            "uvit_in_channels": args.uvit_in_channels, 
+            "uvit_hidden_channels": args.uvit_hidden_channels,
+            "uvit_out_channels": args.uvit_out_channels,
+            "uvit_image_size": args.uvit_image_size,
+            "uvit_timesteps": args.uvit_timesteps,
+
             # Data
             "data_variation": args.data_variation,
             "input_type": args.input_type,
@@ -338,6 +346,14 @@ def get_params(args, device, n_model_params, current_save_name, checkpoint_save_
             "physicsformer_heads_2": args.physicsformer_heads_2,
             "physicsformer_mlp_dim_2": args.physicsformer_mlp_dim_2,
             "physicsformer_dropout_2": args.physicsformer_dropout_2,
+        
+            # ---- U-ViT Model 2
+            "uvit_2_in_channels": args.uvit_2_in_channels,
+            "uvit_2_hidden_channels": args.uvit_2_hidden_channels,
+            "uvit_2_out_channels": args.uvit_2_out_channels,
+            "uvit_2_image_size": args.uvit_2_image_size,
+            "uvit_2_timesteps": args.uvit_2_timesteps,
+
         }
 
 
@@ -372,6 +388,38 @@ def backward_model(model, x, y, optimizer, criterion, device, epoch, amp_scaler,
         if epoch is None or epoch % 2 == 0:
             model.discriminator_step(x, y, optimizer[1], amp_scaler, device, gradient_clipping_threshold)
         loss, _, _ = model.generator_step(x, y, optimizer[0], amp_scaler, device, gradient_clipping_threshold)
+    elif isinstance(model, UViT):
+        optimizer.zero_grad()
+
+        t = torch.randint(0, model.timesteps, (y.size(0),), device=device).long()
+
+        # add noise to the target
+        noise = torch.randn_like(y)
+        noisy_y = q_sample(y, t, model.schedule_alphas_cumprod, noise)
+
+        # add input image as additional channel
+        noisy_y_with_x = torch.cat([noisy_y, x], dim=1)  # shape [B, 2, H, W]
+
+        # predict noise
+        with autocast(device_type=device.type):
+            noise_pred = model(noisy_y_with_x, t, inference=False)
+            # loss = nn.MSELoss()(noise_pred, noise)
+            loss = criterion(noise_pred, noise)
+
+        # backpropagate + rescaling
+        if amp_scaler:
+            amp_scaler.scale(loss).backward()
+            if gradient_clipping_threshold:
+                amp_scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_clipping_threshold)
+
+            amp_scaler.step(optimizer)
+            amp_scaler.update()
+        else:
+            loss.backward()
+            if gradient_clipping_threshold:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_clipping_threshold)
+            optimizer.step()
     elif amp_scaler:
         # reset gradients 
         optimizer.zero_grad()
@@ -767,7 +815,12 @@ def train(args=None):
             dummy_inference_data = [torch.ones(size=(1, channels, 256, 256)).to(device) for channels in INPUT_CHANNELS]
         else:
             dummy_inference_data = torch.ones(size=(1, INPUT_CHANNELS, 256, 256)).to(device)
+        if isinstance(model, UViT):
+            original_forward = model.forward
+            model.forward = lambda x: original_forward(x, dummy_pass=True)
         writer.add_graph(model, dummy_inference_data)
+        if isinstance(model, UViT):
+            model.forward = original_forward
 
         # Run Training
         last_best_loss = float("inf")

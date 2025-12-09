@@ -213,6 +213,7 @@ tensorboard
 logs
 checkpoints
 data
+physics_u_vit
 custom_commands.md
 
 
