@@ -83,8 +83,8 @@ def remove_noise_step(epsilon_theta, x_t, t, schedule):
     t = t.to(x_t.device)
     schedule = schedule.to(x_t.device)
 
-    alpha_t = schedule[t]
-    alpha_prev = schedule[torch.clamp(t-1, min=0)]
+    alpha_t = schedule[t].view(-1, 1, 1, 1)
+    alpha_prev = schedule[torch.clamp(t-1, min=0)].view(-1, 1, 1, 1)
 
     # prediction of original image
     x0_pred = (x_t - torch.sqrt(1 - alpha_t) * epsilon_theta) / torch.sqrt(alpha_t)
