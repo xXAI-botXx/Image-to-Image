@@ -52,7 +52,7 @@ import prime_printer as prime
 
 from ..utils.argument_parsing import parse_args
 from ..utils.model_io import get_model, save_checkpoint
-from ..utils.diffusion import q_sample
+from ..utils.diffusion import add_noise_step
 
 from ..data.physgen import PhysGenDataset
 from ..data.residual_physgen import PhysGenResidualDataset, to_device
@@ -395,7 +395,7 @@ def backward_model(model, x, y, optimizer, criterion, device, epoch, amp_scaler,
 
         # add noise to the target
         noise = torch.randn_like(y)
-        noisy_y = q_sample(y, t, model.schedule_alphas_cumprod, noise)
+        noisy_y = add_noise_step(y, t, model.schedule_alphas_cumprod, noise)
 
         # add input image as additional channel
         noisy_y_with_x = torch.cat([noisy_y, x], dim=1)  # shape [B, 2, H, W]

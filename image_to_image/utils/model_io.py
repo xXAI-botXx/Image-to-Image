@@ -180,36 +180,15 @@ def get_single_model(model_name, args, criterion, device):
                      timesteps=args.uvit_2_timesteps).to(device)
     else:
         raise ValueError(f"'{model_name}' is not a supported model.")
-    
-    # print model summary
-    # sys.stdout.reconfigure(encoding='utf-8')
-    # old_stdout = sys.stdout
-    # buffer = io.StringIO()
-    # sys.stdout = io.TextIOWrapper(
-    #     sys.stdout.buffer,
-    #     encoding='utf-8',
-    #     errors='replace',
-    #     line_buffering=True,
-    #     write_through=True
-    # )
-    # try:
-        # # Redirect to UTF-8 buffer temporarily
-        # sys.stdout = buffer
 
     print("\nModel Information:\n")
-    # buffer = io.StringIO()
     if isinstance(model, UViT):
         model_stats = summary(model, input_size=(1, input_channels, 256, 256), dummy_pass=True, verbose=0)
     else:
         model_stats = summary(model, input_size=(1, input_channels, 256, 256), verbose=0)
-    # print(str(model_stats).encode('utf-8', errors='replace').decode('utf-8'))
     sys.stdout.flush()
     sys.stdout.buffer.write(str(model_stats).encode('utf-8', errors='replace') + b'\n')
     print("\n")
-    # finally:
-    #     sys.stdout = old_stdout
-
-    # print(buffer.getvalue())
 
     return model
 

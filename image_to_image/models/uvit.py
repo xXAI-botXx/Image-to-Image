@@ -12,7 +12,7 @@ By Tobia Ippolito
 import torch
 import torch.nn as nn
 
-from ..utils.diffusion import get_alphas_cumprod, p_sample, q_sample
+from ..utils.diffusion import get_alphas_cumprod, remove_noise_step, add_noise_step
 
 # import the model from the official repo
 import sys
@@ -122,7 +122,7 @@ class UViT(nn.Module):
 
             # Add noise to original image
             noise = torch.randn_like(x)
-            x_t = q_sample(x, t_start, self.schedule_alphas_cumprod, noise)
+            x_t = add_noise_step(x, t_start, self.schedule_alphas_cumprod, noise)
 
             # reverse diffusion process 
             for t_inv in reversed(range(t_start[0].item() + 1)):
@@ -137,7 +137,7 @@ class UViT(nn.Module):
                 epsilon_theta = self.combine_net(epsilon_theta_raw)
 
                 # compute posterior mean, means we go one step back in time
-                x_t = p_sample(epsilon_theta, x_t, t_tensor, self.schedule_alphas_cumprod)
+                x_t = remove_noise_step(epsilon_theta, x_t, t_tensor, self.schedule_alphas_cumprod)
 
             y = torch.clamp(x_t, 0.0, 1.0)
 

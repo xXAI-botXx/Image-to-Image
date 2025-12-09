@@ -1,4 +1,15 @@
+"""
+Helper functions for Diffusion Model.
 
+For adding noise to a input and performing a reverse denoising step.
+
+Functions:
+- get_alphas_cumprod
+- make_one_denoising_step
+- p_sample
+
+By Tobia Ippolito
+"""
 # ---------------------------
 #         > Import <
 # ---------------------------
@@ -29,9 +40,13 @@ def get_alphas_cumprod(timesteps, beta_start=0.0001, beta_end=0.02):
 
 
 
-def q_sample(x0, t, alphas_cumprod, noise=None):
+def add_noise_step(x0, t, alphas_cumprod, noise=None):
     """
     Add noise to x0 at timestep t using the closed-form forward process.
+
+    'q_sample' in classic DDPM.
+
+    One forward noising step.
 
     Parameters:
     - x0: [B, C, H, W]
@@ -55,38 +70,39 @@ def q_sample(x0, t, alphas_cumprod, noise=None):
 
 
 
-def p_sample(epsilon_theta, x_t, t, schedule):
+def remove_noise_step(epsilon_theta, x_t, t, schedule):
     """
     Perform one reverse diffusion step: x_t -> x_{t-1}
+
+    'p_sample' in classic DDPM.
+
+    One reverse diffusion step
+
+    Without prediction of the noise this is muste be made outside of this function.
     """
     t = t.to(x_t.device)
     schedule = schedule.to(x_t.device)
 
     alpha_t = schedule[t]
-    safe_t_minus_1 = torch.clamp(t-1, min=0)
-    alpha_prev = schedule[safe_t_minus_1]
+    alpha_prev = schedule[torch.clamp(t-1, min=0)]
 
-    # # predict noise
-    # epsilon_theta = model(x_t, t)
+    # prediction of original image
+    x0_pred = (x_t - torch.sqrt(1 - alpha_t) * epsilon_theta) / torch.sqrt(alpha_t)
 
     # posterior mean
-    # mean = (1 / alpha_t.sqrt()) * (x_t - ((1 - alpha_t) / (1 - alpha_t).sqrt()) * epsilon_theta)
-    mean = (1 / alpha_t.sqrt()) * (x_t - ((1 - alpha_t)/ (1 - alpha_prev)).sqrt() * epsilon_theta)
+    # mean = (1 / alpha_t.sqrt()) * (x_t - ((1 - alpha_t)/ (1 - alpha_prev)).sqrt() * epsilon_theta)
+    mean = torch.sqrt(alpha_prev) * x0_pred + torch.sqrt(1 - alpha_prev) * epsilon_theta
 
     # add noise if t > 0
     # make boolean in image shape + use with multiplication not branching
     is_not_zero = (t > 0).float().view(-1, 1, 1, 1)  # 1 or 0 as tensor
 
     z = torch.randn_like(x_t)
-    sigma_t = ((1 - alpha_prev) / (1 - alpha_t) * (1 - alpha_t / alpha_prev)).sqrt()
-    
+    beta_t = 1 - alpha_t / alpha_prev
+    sigma_t = torch.sqrt(beta_t)
+    # sigma_t = ((1 - alpha_prev) / (1 - alpha_t) * (1 - alpha_t / alpha_prev)).sqrt()
+
     x_prev = mean + is_not_zero * sigma_t * z
-    # if is_not_zero:
-    #     z = torch.randn_like(x_t)
-    #     sigma_t = ((1 - alpha_prev) / (1 - alpha_t) * (1 - alpha_t / alpha_prev)).sqrt()
-    #     x_prev = mean + sigma_t * z
-    # else:
-    #     x_prev = mean
     return x_prev
 
 
