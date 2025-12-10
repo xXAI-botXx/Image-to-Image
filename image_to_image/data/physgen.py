@@ -141,7 +141,7 @@ class PhysGenDataset(Dataset):
         ])
         print(f"PhysGen ({variation}) Dataset for {mode} got created")
         sample = self[0]  # returns (input_img, target_img)
-        print(f"Example Sample Shapes\n    - input: {sample[0].shape}\n     - target: {sample[1].shape}")
+        print(f"Example Sample Shapes\n    - input: {sample[0].shape}\n    - target: {sample[1].shape}")
 
     def __len__(self):
         """
